@@ -8,7 +8,7 @@ from terminal_ai.utils import (
     is_interactive_command,
     is_dangerous_command,
     check_command_exists,
-    extract_subdomains_and_ips
+    extract_subdomains_and_ips,
 )
 
 
@@ -41,7 +41,7 @@ def test_check_command_exists():
     exists, name = check_command_exists("ls")
     assert exists == True
     assert name == "ls"
-    
+
     exists, name = check_command_exists("nonexistent_command_xyz")
     assert exists == False
 
@@ -51,6 +51,5 @@ def test_extract_subdomains_and_ips():
     output = "Nmap scan report for dc.active.htb (10.129.222.192)"
     results = extract_subdomains_and_ips(output)
     assert len(results) > 0
-    assert any(r['domain'] == 'dc.active.htb' for r in results)
-    assert any(r['ip'] == '10.129.222.192' for r in results)
-
+    assert any(r["domain"] == "dc.active.htb" for r in results)
+    assert any(r["ip"] == "10.129.222.192" for r in results)

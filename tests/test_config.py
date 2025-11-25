@@ -20,7 +20,7 @@ def test_save_and_load_config():
     """Test saving and loading config"""
     test_config = {"api_key": "test-key-123", "setting": "value"}
     save_config(test_config)
-    
+
     loaded = load_config()
     assert loaded.get("api_key") == "test-key-123"
     assert loaded.get("setting") == "value"
@@ -30,7 +30,6 @@ def test_set_and_get_api_key():
     """Test setting and getting API key"""
     test_key = "test-api-key-456"
     set_api_key(test_key)
-    
+
     retrieved = get_api_key()
     assert retrieved == test_key
-

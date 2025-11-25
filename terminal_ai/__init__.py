@@ -11,12 +11,11 @@ from terminal_ai.core import execute_commands_sequence, ask_ai_for_commands
 from terminal_ai.cli import interactive_mode, main
 
 __all__ = [
-    'Colors',
-    'get_api_key',
-    'set_api_key',
-    'execute_commands_sequence',
-    'ask_ai_for_commands',
-    'interactive_mode',
-    'main',
+    "Colors",
+    "get_api_key",
+    "set_api_key",
+    "execute_commands_sequence",
+    "ask_ai_for_commands",
+    "interactive_mode",
+    "main",
 ]
-

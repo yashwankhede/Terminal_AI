@@ -19,11 +19,19 @@ except ImportError:
 
 from terminal_ai.config import Colors, CONFIG_DIR
 from terminal_ai.utils import (
-    type_command, is_long_running_command, is_interactive_command,
-    suggest_non_interactive_alternative, is_dangerous_command,
-    check_command_exists, find_wordlists, get_available_wordlists_info,
-    extract_subdomains_and_ips, add_to_hosts_file, get_available_tools,
-    suggest_alternative, get_system_info
+    type_command,
+    is_long_running_command,
+    is_interactive_command,
+    suggest_non_interactive_alternative,
+    is_dangerous_command,
+    check_command_exists,
+    find_wordlists,
+    get_available_wordlists_info,
+    extract_subdomains_and_ips,
+    add_to_hosts_file,
+    get_available_tools,
+    suggest_alternative,
+    get_system_info,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,7 +45,7 @@ def execute_command_live(
     shell: bool = True,
     show_command: bool = True,
     timeout: int = 300,
-    capture_output: bool = True
+    capture_output: bool = True,
 ) -> Tuple[int, str]:
     """
     Execute a terminal command with live output streaming
@@ -45,12 +53,12 @@ def execute_command_live(
     """
     if show_command:
         type_command(command)
-    
+
     output_lines = []
     last_output_time = None
     prompt_count = 0
     process = None
-    
+
     try:
         # Use Popen for real-time output
         process = subprocess.Popen(
@@ -60,54 +68,70 @@ def execute_command_live(
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            universal_newlines=True
+            universal_newlines=True,
         )
-        
+
         logger.info(f"Executing command: {command}")
-        
+
         # Stream output in real-time
         start_time = time.time()
         while True:
             output = process.stdout.readline()
-            if output == '' and process.poll() is not None:
+            if output == "" and process.poll() is not None:
                 break
             if output:
-                print(output, end='', flush=True)
+                print(output, end="", flush=True)
                 if capture_output:
                     output_lines.append(output)
                 last_output_time = time.time()
-                
+
                 # Detect interactive prompts (like msf6 >, mysql>, etc.)
-                if re.search(r'(msf\d+\s*>|mysql>\s*|psql>\s*|>>>\s*|In \[\d+\]:\s*)$', output.strip()):
+                if re.search(
+                    r"(msf\d+\s*>|mysql>\s*|psql>\s*|>>>\s*|In \[\d+\]:\s*)$", output.strip()
+                ):
                     prompt_count += 1
                     # If we see multiple prompts with no other output, likely waiting for input
                     if prompt_count >= 3:
                         logger.warning("Detected interactive prompt, terminating")
-                        print(f"\n{Colors.YELLOW}⚠️  Detected interactive prompt. Command appears to be waiting for input.{Colors.RESET}")
-                        print(f"{Colors.YELLOW}Terminating and opening in new terminal instead...{Colors.RESET}")
+                        print(
+                            f"\n{Colors.YELLOW}⚠️  Detected interactive prompt. Command appears to be waiting for input.{Colors.RESET}"
+                        )
+                        print(
+                            f"{Colors.YELLOW}Terminating and opening in new terminal instead...{Colors.RESET}"
+                        )
                         process.terminate()
-                        return (130, ''.join(output_lines))
-            
+                        return (130, "".join(output_lines))
+
             # Check for no output for too long (might be waiting for input)
-            if last_output_time and (time.time() - last_output_time > 10) and process.poll() is None:
+            if (
+                last_output_time
+                and (time.time() - last_output_time > 10)
+                and process.poll() is None
+            ):
                 # Check if process is still running but producing no output
                 if is_interactive_command(command):
                     logger.warning("No output for 10s, command may be waiting for input")
-                    print(f"\n{Colors.YELLOW}⚠️  No output for 10s. Command may be waiting for input.{Colors.RESET}")
-                    print(f"{Colors.YELLOW}Terminating and opening in new terminal instead...{Colors.RESET}")
+                    print(
+                        f"\n{Colors.YELLOW}⚠️  No output for 10s. Command may be waiting for input.{Colors.RESET}"
+                    )
+                    print(
+                        f"{Colors.YELLOW}Terminating and opening in new terminal instead...{Colors.RESET}"
+                    )
                     process.terminate()
-                    return (130, ''.join(output_lines))
-            
+                    return (130, "".join(output_lines))
+
             # Check timeout
             if time.time() - start_time > timeout:
                 logger.warning(f"Command timeout after {timeout}s")
-                print(f"\n{Colors.YELLOW}⚠️  Command timeout after {timeout}s. Continuing...{Colors.RESET}")
+                print(
+                    f"\n{Colors.YELLOW}⚠️  Command timeout after {timeout}s. Continuing...{Colors.RESET}"
+                )
                 process.terminate()
                 break
-        
+
         return_code = process.poll()
         logger.info(f"Command completed with exit code: {return_code}")
-        return (return_code if return_code is not None else 0, ''.join(output_lines))
+        return (return_code if return_code is not None else 0, "".join(output_lines))
     except KeyboardInterrupt:
         logger.info("Command interrupted by user")
         print(f"\n{Colors.YELLOW}Command interrupted by user{Colors.RESET}")
@@ -116,7 +140,7 @@ def execute_command_live(
                 process.terminate()
             except:
                 pass
-        return (130, ''.join(output_lines))
+        return (130, "".join(output_lines))
     except Exception as e:
         error_msg = f"Error executing command: {str(e)}"
         logger.error(error_msg)
@@ -130,13 +154,7 @@ def execute_command_safe(command: str, shell: bool = True) -> Tuple[str, int]:
     Returns: (output, exit_code)
     """
     try:
-        result = subprocess.run(
-            command,
-            shell=shell,
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+        result = subprocess.run(command, shell=shell, capture_output=True, text=True, timeout=30)
         output = result.stdout + result.stderr
         return output, result.returncode
     except subprocess.TimeoutExpired:
@@ -151,43 +169,45 @@ def create_terminal_control_system(terminal_id: str) -> Dict[str, Path]:
     """Create control files for a terminal session"""
     control_dir = CONFIG_DIR / "terminal_controls"
     control_dir.mkdir(exist_ok=True)
-    
+
     control_files = {
-        'command_file': control_dir / f"{terminal_id}_commands.txt",
-        'output_file': control_dir / f"{terminal_id}_output.txt",
-        'status_file': control_dir / f"{terminal_id}_status.txt",
-        'pid_file': control_dir / f"{terminal_id}_pid.txt"
+        "command_file": control_dir / f"{terminal_id}_commands.txt",
+        "output_file": control_dir / f"{terminal_id}_output.txt",
+        "status_file": control_dir / f"{terminal_id}_status.txt",
+        "pid_file": control_dir / f"{terminal_id}_pid.txt",
     }
-    
+
     # Initialize files
     for file_path in control_files.values():
         if file_path.exists():
             file_path.unlink()
         file_path.touch()
-    
+
     logger.debug(f"Created terminal control system for {terminal_id}")
     return control_files
 
 
-def get_terminal_wrapper_script(control_files: Dict[str, Path], initial_command: Optional[str] = None) -> str:
+def get_terminal_wrapper_script(
+    control_files: Dict[str, Path], initial_command: Optional[str] = None
+) -> str:
     """Generate a wrapper script that reads commands from control file"""
-    cmd_file = control_files['command_file']
-    out_file = control_files['output_file']
-    status_file = control_files['status_file']
-    
+    cmd_file = control_files["command_file"]
+    out_file = control_files["output_file"]
+    status_file = control_files["status_file"]
+
     # Escape paths for bash
     cmd_file_str = str(cmd_file).replace("'", "'\\''")
     out_file_str = str(out_file).replace("'", "'\\''")
     status_file_str = str(status_file).replace("'", "'\\''")
-    
+
     # Escape initial command for bash
     if initial_command:
         escaped_init_cmd = initial_command.replace("'", "'\\''")
         init_cmd_part = f'execute_command "{escaped_init_cmd}"'
     else:
         init_cmd_part = ""
-    
-    wrapper = f'''#!/bin/bash
+
+    wrapper = f"""#!/bin/bash
 # Terminal AI Control Wrapper
 # This script reads commands from control file and executes them
 
@@ -230,7 +250,7 @@ while true; do
     fi
     sleep 0.5
 done
-'''
+"""
     return wrapper
 
 
@@ -238,7 +258,7 @@ def open_new_terminal(
     command: Optional[str] = None,
     split: bool = False,
     output_file: Optional[str] = None,
-    terminal_id: Optional[str] = None
+    terminal_id: Optional[str] = None,
 ) -> str:
     """
     Open a new terminal window with AI control capability
@@ -246,31 +266,31 @@ def open_new_terminal(
     """
     if terminal_id is None:
         terminal_id = f"term_{int(time.time())}_{os.getpid()}"
-    
+
     # Create control system
     control_files = create_terminal_control_system(terminal_id)
-    
+
     # Generate wrapper script
     wrapper_script = get_terminal_wrapper_script(control_files, command)
-    wrapper_file = control_files['command_file'].parent / f"{terminal_id}_wrapper.sh"
-    
-    with open(wrapper_file, 'w') as f:
+    wrapper_file = control_files["command_file"].parent / f"{terminal_id}_wrapper.sh"
+
+    with open(wrapper_file, "w") as f:
         f.write(wrapper_script)
     os.chmod(wrapper_file, 0o755)
-    
+
     # Command to run in new terminal
     terminal_command = f"bash {wrapper_file}"
-    
+
     if sys.platform == "darwin":
         # macOS - try to detect terminal app
-        terminal_app = os.getenv('TERM_PROGRAM', 'Terminal')
-        
+        terminal_app = os.getenv("TERM_PROGRAM", "Terminal")
+
         # Escape command for AppleScript
-        escaped_cmd = terminal_command.replace('\\', '\\\\').replace('"', '\\"')
-        
-        if terminal_app == 'iTerm.app' or 'iTerm' in terminal_app:
+        escaped_cmd = terminal_command.replace("\\", "\\\\").replace('"', '\\"')
+
+        if terminal_app == "iTerm.app" or "iTerm" in terminal_app:
             # iTerm2 - get window ID
-            script = f'''
+            script = f"""
             tell application "iTerm"
                 set newWindow to (create window with default profile)
                 set windowId to id of newWindow
@@ -279,44 +299,44 @@ def open_new_terminal(
                 end tell
                 return windowId
             end tell
-            '''
-            result = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+            """
+            result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
             window_id = result.stdout.strip()
         else:
             # Terminal.app - get window ID
-            script = f'''
+            script = f"""
             tell application "Terminal"
                 set newTab to (do script "{escaped_cmd}")
                 set windowId to id of window 1 whose selected tab is newTab
                 activate
                 return windowId as string
             end tell
-            '''
-            result = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+            """
+            result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
             window_id = result.stdout.strip()
-        
+
         # Store terminal info
         controlled_terminals[terminal_id] = {
-            'window_id': window_id,
-            'control_files': control_files,
-            'wrapper_file': wrapper_file,
-            'status': 'active'
+            "window_id": window_id,
+            "control_files": control_files,
+            "wrapper_file": wrapper_file,
+            "status": "active",
         }
-        
+
     elif sys.platform.startswith("linux"):
         # Linux - use tmux or screen for control
-        terminals = ['gnome-terminal', 'konsole', 'xterm', 'terminator']
+        terminals = ["gnome-terminal", "konsole", "xterm", "terminator"]
         for term in terminals:
-            if subprocess.run(['which', term], capture_output=True).returncode == 0:
-                subprocess.Popen([term, '-e', 'bash', '-c', terminal_command + '; exec bash'])
+            if subprocess.run(["which", term], capture_output=True).returncode == 0:
+                subprocess.Popen([term, "-e", "bash", "-c", terminal_command + "; exec bash"])
                 break
-        
+
         controlled_terminals[terminal_id] = {
-            'control_files': control_files,
-            'wrapper_file': wrapper_file,
-            'status': 'active'
+            "control_files": control_files,
+            "wrapper_file": wrapper_file,
+            "status": "active",
         }
-    
+
     logger.info(f"Opened new terminal: {terminal_id}")
     return terminal_id
 
@@ -326,13 +346,13 @@ def send_command_to_terminal(terminal_id: str, command: str) -> bool:
     if terminal_id not in controlled_terminals:
         logger.warning(f"Terminal {terminal_id} not found")
         return False
-    
-    control_files = controlled_terminals[terminal_id]['control_files']
-    command_file = control_files['command_file']
-    
+
+    control_files = controlled_terminals[terminal_id]["control_files"]
+    command_file = control_files["command_file"]
+
     try:
-        with open(command_file, 'a') as f:
-            f.write(command + '\n')
+        with open(command_file, "a") as f:
+            f.write(command + "\n")
         logger.debug(f"Sent command to terminal {terminal_id}: {command}")
         return True
     except Exception as e:
@@ -344,17 +364,17 @@ def read_terminal_output(terminal_id: str) -> str:
     """Read output from a controlled terminal"""
     if terminal_id not in controlled_terminals:
         return ""
-    
-    control_files = controlled_terminals[terminal_id]['control_files']
-    output_file = control_files['output_file']
-    
+
+    control_files = controlled_terminals[terminal_id]["control_files"]
+    output_file = control_files["output_file"]
+
     try:
         if output_file.exists():
-            with open(output_file, 'r') as f:
+            with open(output_file, "r") as f:
                 return f.read()
     except Exception as e:
         logger.error(f"Error reading terminal output: {e}")
-    
+
     return ""
 
 
@@ -362,17 +382,17 @@ def get_terminal_status(terminal_id: str) -> str:
     """Get status of a controlled terminal"""
     if terminal_id not in controlled_terminals:
         return "not_found"
-    
-    control_files = controlled_terminals[terminal_id]['control_files']
-    status_file = control_files['status_file']
-    
+
+    control_files = controlled_terminals[terminal_id]["control_files"]
+    status_file = control_files["status_file"]
+
     try:
         if status_file.exists():
-            with open(status_file, 'r') as f:
+            with open(status_file, "r") as f:
                 return f.read().strip()
     except Exception as e:
         logger.error(f"Error reading terminal status: {e}")
-    
+
     return "unknown"
 
 
@@ -380,9 +400,9 @@ def read_terminal_output_file(output_file: str, timeout: int = 5) -> str:
     """Read output from a terminal output file (legacy function)"""
     if not os.path.exists(output_file):
         return ""
-    
+
     try:
-        with open(output_file, 'r') as f:
+        with open(output_file, "r") as f:
             return f.read()
     except Exception as e:
         logger.error(f"Error reading output file: {e}")
@@ -393,42 +413,57 @@ def check_parallel_outputs(command_history: List[Dict[str, Any]]) -> None:
     """Check and update command history with output from parallel terminals"""
     for entry in command_history:
         # Check for new terminal control system
-        if entry.get('terminal_id'):
-            terminal_id = entry.get('terminal_id')
+        if entry.get("terminal_id"):
+            terminal_id = entry.get("terminal_id")
             output = read_terminal_output(terminal_id)
-            if output and output != entry.get('output', ''):
-                entry['output'] = output
+            if output and output != entry.get("output", ""):
+                entry["output"] = output
                 # Try to detect if command completed
-                if 'Nmap done' in output or 'completed' in output.lower() or 'finished' in output.lower():
-                    entry['exit_code'] = 0
-                    entry['completed'] = True
+                if (
+                    "Nmap done" in output
+                    or "completed" in output.lower()
+                    or "finished" in output.lower()
+                ):
+                    entry["exit_code"] = 0
+                    entry["completed"] = True
         # Legacy support for output_file
-        elif entry.get('parallel') and entry.get('output_file'):
-            output_file = entry.get('output_file')
+        elif entry.get("parallel") and entry.get("output_file"):
+            output_file = entry.get("output_file")
             if os.path.exists(output_file):
                 # Read the output
                 output = read_terminal_output_file(output_file)
-                if output and output != entry.get('output', ''):
+                if output and output != entry.get("output", ""):
                     # Update the entry with new output
-                    entry['output'] = output
+                    entry["output"] = output
                     # Try to detect if command completed
-                    if 'Nmap done' in output or 'completed' in output.lower() or 'finished' in output.lower():
-                        entry['exit_code'] = 0
-                        entry['completed'] = True
+                    if (
+                        "Nmap done" in output
+                        or "completed" in output.lower()
+                        or "finished" in output.lower()
+                    ):
+                        entry["exit_code"] = 0
+                        entry["completed"] = True
 
 
-def find_controlled_terminal_for_command(command: str, command_history: List[Dict[str, Any]]) -> Optional[str]:
+def find_controlled_terminal_for_command(
+    command: str, command_history: List[Dict[str, Any]]
+) -> Optional[str]:
     """Find an existing controlled terminal that can handle this command"""
     command_lower = command.lower()
-    
+
     # Check if command is for an interactive program that's already running
-    if 'msfconsole' in command_lower or 'use ' in command_lower or 'set ' in command_lower or 'run' == command_lower.strip():
+    if (
+        "msfconsole" in command_lower
+        or "use " in command_lower
+        or "set " in command_lower
+        or "run" == command_lower.strip()
+    ):
         # Look for existing msfconsole terminal
         for entry in reversed(command_history):
-            if entry.get('controlled') and entry.get('interactive'):
-                if 'msfconsole' in entry.get('command', '').lower():
-                    return entry.get('terminal_id')
-    
+            if entry.get("controlled") and entry.get("interactive"):
+                if "msfconsole" in entry.get("command", "").lower():
+                    return entry.get("terminal_id")
+
     return None
 
 
@@ -438,55 +473,59 @@ def extract_commands_from_response(response: str) -> List[Dict[str, str]]:
     Returns list of dicts with 'type' and 'command' keys
     """
     commands = []
-    
+
     # Extract code blocks
-    code_block_pattern = r'```(?:bash|sh|shell)?\n(.*?)```'
+    code_block_pattern = r"```(?:bash|sh|shell)?\n(.*?)```"
     matches = re.findall(code_block_pattern, response, re.DOTALL)
-    
+
     for match in matches:
-        lines = [line.strip() for line in match.strip().split('\n') if line.strip()]
+        lines = [line.strip() for line in match.strip().split("\n") if line.strip()]
         for line in lines:
             # Skip comments
-            if line.startswith('#'):
+            if line.startswith("#"):
                 continue
-            
+
             # Check for special directives
-            if line.startswith('NEW_TERMINAL:'):
-                cmd = line.replace('NEW_TERMINAL:', '').strip()
-                commands.append({'type': 'new_terminal', 'command': cmd})
-            elif line.startswith('SPLIT_TERMINAL:'):
-                cmd = line.replace('SPLIT_TERMINAL:', '').strip()
-                commands.append({'type': 'split_terminal', 'command': cmd})
-            elif line.startswith('SEND_TO_TERMINAL:'):
+            if line.startswith("NEW_TERMINAL:"):
+                cmd = line.replace("NEW_TERMINAL:", "").strip()
+                commands.append({"type": "new_terminal", "command": cmd})
+            elif line.startswith("SPLIT_TERMINAL:"):
+                cmd = line.replace("SPLIT_TERMINAL:", "").strip()
+                commands.append({"type": "split_terminal", "command": cmd})
+            elif line.startswith("SEND_TO_TERMINAL:"):
                 # Format: SEND_TO_TERMINAL:terminal_id:command
-                parts = line.replace('SEND_TO_TERMINAL:', '').split(':', 1)
+                parts = line.replace("SEND_TO_TERMINAL:", "").split(":", 1)
                 if len(parts) == 2:
                     terminal_id, cmd = parts
-                    commands.append({'type': 'send_to_terminal', 'terminal_id': terminal_id.strip(), 'command': cmd.strip()})
+                    commands.append(
+                        {
+                            "type": "send_to_terminal",
+                            "terminal_id": terminal_id.strip(),
+                            "command": cmd.strip(),
+                        }
+                    )
             else:
-                commands.append({'type': 'execute', 'command': line})
-    
+                commands.append({"type": "execute", "command": line})
+
     # Also look for single line commands
     if not commands:
         # Try to find commands after common prefixes
-        lines = response.split('\n')
+        lines = response.split("\n")
         for line in lines:
             line = line.strip()
-            if line and not line.startswith('#') and not line.startswith('```'):
+            if line and not line.startswith("#") and not line.startswith("```"):
                 # Check if it looks like a command
-                if any(line.startswith(prefix) for prefix in ['$', '>', '%']):
-                    cmd = line.lstrip('$>% ').strip()
+                if any(line.startswith(prefix) for prefix in ["$", ">", "%"]):
+                    cmd = line.lstrip("$>% ").strip()
                     if cmd:
-                        commands.append({'type': 'execute', 'command': cmd})
-    
+                        commands.append({"type": "execute", "command": cmd})
+
     logger.debug(f"Extracted {len(commands)} commands from response")
     return commands
 
 
 def ask_ai_for_next_steps(
-    api_key: str,
-    command_history: List[Dict[str, Any]],
-    max_iterations: int = 5
+    api_key: str, command_history: List[Dict[str, Any]], max_iterations: int = 5
 ) -> List[Dict[str, str]]:
     """
     Intelligently analyze results and suggest next steps
@@ -494,33 +533,37 @@ def ask_ai_for_next_steps(
     """
     if not command_history:
         return []
-    
+
     if OpenAI is None:
         logger.error("OpenAI package not available")
         return []
-    
+
     # Get recent results
     recent_results = []
     for entry in command_history[-5:]:  # Last 5 commands
-        if entry.get('type') == 'execute':
-            recent_results.append({
-                'command': entry.get('command', ''),
-                'exit_code': entry.get('exit_code', 0),
-                'output': entry.get('output', '')[:2000]  # Limit output size
-            })
-    
+        if entry.get("type") == "execute":
+            recent_results.append(
+                {
+                    "command": entry.get("command", ""),
+                    "exit_code": entry.get("exit_code", 0),
+                    "output": entry.get("output", "")[:2000],  # Limit output size
+                }
+            )
+
     if not recent_results:
         return []
-    
+
     system_info = get_system_info()
     available_tools = get_available_tools()
     available_wordlists = get_available_wordlists_info()
-    
-    results_summary = "\n".join([
-        f"Command: {r['command']}\nExit Code: {r['exit_code']}\nOutput:\n{r['output']}\n---"
-        for r in recent_results
-    ])
-    
+
+    results_summary = "\n".join(
+        [
+            f"Command: {r['command']}\nExit Code: {r['exit_code']}\nOutput:\n{r['output']}\n---"
+            for r in recent_results
+        ]
+    )
+
     system_prompt = f"""You are an intelligent penetration testing assistant. Analyze the results from recent commands and suggest the next logical steps.
 
 System Information:
@@ -557,22 +600,25 @@ Respond with commands to execute next, or "NO_MORE_STEPS" if the task is complet
 
     try:
         client = OpenAI(api_key=api_key)
-        
+
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": "Based on these results, what should I do next? Continue the reconnaissance and enumeration process."}
+                {
+                    "role": "user",
+                    "content": "Based on these results, what should I do next? Continue the reconnaissance and enumeration process.",
+                },
             ],
             temperature=0.7,
-            max_tokens=1500
+            max_tokens=1500,
         )
-        
+
         response_text = response.choices[0].message.content
-        
+
         if "NO_MORE_STEPS" in response_text.upper() or "no more steps" in response_text.lower():
             return []
-        
+
         # Extract commands
         commands = extract_commands_from_response(response_text)
         return commands
@@ -585,7 +631,7 @@ def ask_ai_for_commands(
     prompt: str,
     api_key: str,
     context: str = "",
-    command_history: Optional[List[Dict[str, Any]]] = None
+    command_history: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """
     Ask AI for commands to execute
@@ -594,14 +640,14 @@ def ask_ai_for_commands(
     if OpenAI is None:
         logger.error("OpenAI package not available")
         return ""
-    
+
     if command_history is None:
         command_history = []
-    
+
     system_info = get_system_info()
     available_tools = get_available_tools()
     available_wordlists = get_available_wordlists_info()
-    
+
     # Build context from command history
     history_context = ""
     failed_commands = []
@@ -609,62 +655,64 @@ def ask_ai_for_commands(
         history_context = "\n\nPREVIOUS COMMANDS AND OUTPUTS:\n"
         history_context += "=" * 60 + "\n"
         for i, entry in enumerate(command_history[-10:], 1):  # Last 10 commands
-            cmd = entry.get('command', 'N/A')
-            exit_code = entry.get('exit_code', 'N/A')
+            cmd = entry.get("command", "N/A")
+            exit_code = entry.get("exit_code", "N/A")
             history_context += f"\nCommand {i}: {cmd}\n"
             history_context += f"Exit Code: {exit_code}\n"
-            
+
             # Track failed commands
-            if exit_code != 0 and exit_code != 'N/A':
-                failed_commands.append((cmd, entry.get('output', '')))
-            
-            output = entry.get('output', '')
+            if exit_code != 0 and exit_code != "N/A":
+                failed_commands.append((cmd, entry.get("output", "")))
+
+            output = entry.get("output", "")
             if output:
                 # Truncate very long outputs
                 if len(output) > 3000:
                     output = output[:3000] + "\n... (output truncated)"
                 history_context += f"Output:\n{output}\n"
             history_context += "-" * 60 + "\n"
-    
+
     # Analyze previous outputs for key information
     key_findings = ""
     if command_history:
         findings = []
         for entry in command_history[-5:]:  # Last 5 commands
-            output = entry.get('output', '').lower()
+            output = entry.get("output", "").lower()
             # Look for common patterns
-            if 'port' in output and 'open' in output:
+            if "port" in output and "open" in output:
                 # Extract port numbers
-                port_matches = re.findall(r'(\d+)/tcp\s+open', output)
+                port_matches = re.findall(r"(\d+)/tcp\s+open", output)
                 if port_matches:
                     findings.append(f"Open ports detected: {', '.join(set(port_matches))}")
-            
-            if 'smb' in output or '445' in output:
+
+            if "smb" in output or "445" in output:
                 findings.append("SMB service detected on port 445")
-            
-            if 'ldap' in output or '389' in output:
+
+            if "ldap" in output or "389" in output:
                 findings.append("LDAP service detected on port 389")
-            
-            if 'kerberos' in output or '88' in output:
+
+            if "kerberos" in output or "88" in output:
                 findings.append("Kerberos service detected on port 88")
-            
-            if 'domain' in output or 'active.htb' in output.lower():
+
+            if "domain" in output or "active.htb" in output.lower():
                 findings.append("Active Directory domain: active.htb")
-        
+
         if findings:
-            key_findings = "\n\nKEY FINDINGS FROM PREVIOUS COMMANDS:\n" + "\n".join(set(findings)) + "\n"
-    
+            key_findings = (
+                "\n\nKEY FINDINGS FROM PREVIOUS COMMANDS:\n" + "\n".join(set(findings)) + "\n"
+            )
+
     # Build failed commands context
     failed_context = ""
     if failed_commands:
         failed_context = "\n\nFAILED COMMANDS (DO NOT REPEAT THESE):\n"
         for cmd, output in failed_commands:
             failed_context += f"- {cmd}\n"
-            if 'command not found' in output.lower():
+            if "command not found" in output.lower():
                 tool = cmd.split()[0] if cmd.split() else ""
                 failed_context += f"  Reason: Tool '{tool}' not installed\n"
         failed_context += "\nUse alternative tools or built-in commands instead.\n"
-    
+
     system_prompt = f"""You are an autonomous terminal assistant that executes commands directly. You have full control of the terminal.
 
 System Information:
@@ -725,17 +773,17 @@ Respond with the commands to execute based on the context:"""
 
     try:
         client = OpenAI(api_key=api_key)
-        
+
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
             temperature=0.7,
-            max_tokens=2000
+            max_tokens=2000,
         )
-        
+
         return response.choices[0].message.content
     except Exception as e:
         logger.error(f"Error communicating with OpenAI API: {e}")
@@ -745,59 +793,71 @@ Respond with the commands to execute based on the context:"""
 def execute_commands_sequence(
     commands: List[Dict[str, str]],
     api_key: str,
-    command_history: Optional[List[Dict[str, Any]]] = None
+    command_history: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """Execute a sequence of commands with live output and context awareness"""
     if command_history is None:
         command_history = []
-    
+
     print(f"\n{Colors.BOLD}{Colors.BLUE}🤖 Terminal AI is executing commands...{Colors.RESET}\n")
-    
+
     for i, cmd_info in enumerate(commands, 1):
-        cmd_type = cmd_info['type']
-        command = cmd_info['command']
-        
+        cmd_type = cmd_info["type"]
+        command = cmd_info["command"]
+
         if not command:
             continue
-        
+
         # Safety check
         if is_dangerous_command(command):
-            print(f"\n{Colors.YELLOW}⚠️  Warning: Potentially dangerous command detected{Colors.RESET}")
+            print(
+                f"\n{Colors.YELLOW}⚠️  Warning: Potentially dangerous command detected{Colors.RESET}"
+            )
             print(f"{Colors.YELLOW}Command: {command}{Colors.RESET}")
-            response = input(f"{Colors.YELLOW}Execute anyway? (yes/no): {Colors.RESET}").strip().lower()
-            if response != 'yes':
+            response = (
+                input(f"{Colors.YELLOW}Execute anyway? (yes/no): {Colors.RESET}").strip().lower()
+            )
+            if response != "yes":
                 print(f"{Colors.RED}Skipping dangerous command.{Colors.RESET}\n")
                 continue
-        
-        if cmd_type == 'new_terminal':
+
+        if cmd_type == "new_terminal":
             print(f"\n{Colors.MAGENTA}🪟 Opening new controlled terminal window...{Colors.RESET}")
             terminal_id = open_new_terminal(command, split=False)
             time.sleep(0.5)
-            command_history.append({
-                'command': command,
-                'exit_code': 0,
-                'output': 'Opened in new controlled terminal',
-                'type': 'new_terminal',
-                'terminal_id': terminal_id,
-                'controlled': True
-            })
-            print(f"{Colors.GREEN}✓ Terminal ID: {terminal_id} (AI can control this terminal){Colors.RESET}\n")
-        elif cmd_type == 'split_terminal':
+            command_history.append(
+                {
+                    "command": command,
+                    "exit_code": 0,
+                    "output": "Opened in new controlled terminal",
+                    "type": "new_terminal",
+                    "terminal_id": terminal_id,
+                    "controlled": True,
+                }
+            )
+            print(
+                f"{Colors.GREEN}✓ Terminal ID: {terminal_id} (AI can control this terminal){Colors.RESET}\n"
+            )
+        elif cmd_type == "split_terminal":
             print(f"\n{Colors.MAGENTA}📑 Splitting terminal...{Colors.RESET}")
             open_new_terminal(command, split=True)
             time.sleep(0.5)
-            command_history.append({
-                'command': command,
-                'exit_code': 0,
-                'output': 'Opened in split terminal',
-                'type': 'split_terminal'
-            })
+            command_history.append(
+                {
+                    "command": command,
+                    "exit_code": 0,
+                    "output": "Opened in split terminal",
+                    "type": "split_terminal",
+                }
+            )
         else:
             # Regular command execution
             # Check if there are more commands after this one
-            remaining_commands = [c for c in commands[i:] if c.get('type') == 'execute' and c.get('command')]
+            remaining_commands = [
+                c for c in commands[i:] if c.get("type") == "execute" and c.get("command")
+            ]
             has_more_commands = len(remaining_commands) > 0
-            
+
             # Only open new terminal if:
             # 1. It's a long-running command AND
             # 2. There are more commands to execute
@@ -806,142 +866,181 @@ def execute_commands_sequence(
                 output_dir = CONFIG_DIR / "terminal_outputs"
                 output_dir.mkdir(exist_ok=True)
                 output_file = output_dir / f"cmd_{int(time.time())}_{i}.txt"
-                
-                print(f"{Colors.CYAN}⏱️  Detected long-running command with more tasks queued. Opening in new controlled terminal for parallel execution...{Colors.RESET}\n")
+
+                print(
+                    f"{Colors.CYAN}⏱️  Detected long-running command with more tasks queued. Opening in new controlled terminal for parallel execution...{Colors.RESET}\n"
+                )
                 type_command(command)
                 terminal_id = open_new_terminal(command, split=False, output_file=str(output_file))
-                command_history.append({
-                    'command': command,
-                    'exit_code': 0,
-                    'output': f'Running in new controlled terminal window',
-                    'type': 'new_terminal',
-                    'parallel': True,
-                    'output_file': str(output_file),
-                    'terminal_id': terminal_id,
-                    'controlled': True
-                })
-                print(f"{Colors.GREEN}✓ Terminal ID: {terminal_id} (AI can control this terminal){Colors.RESET}")
-                print(f"{Colors.GREEN}✓ Command running in new terminal (parallel execution){Colors.RESET}")
+                command_history.append(
+                    {
+                        "command": command,
+                        "exit_code": 0,
+                        "output": f"Running in new controlled terminal window",
+                        "type": "new_terminal",
+                        "parallel": True,
+                        "output_file": str(output_file),
+                        "terminal_id": terminal_id,
+                        "controlled": True,
+                    }
+                )
+                print(
+                    f"{Colors.GREEN}✓ Terminal ID: {terminal_id} (AI can control this terminal){Colors.RESET}"
+                )
+                print(
+                    f"{Colors.GREEN}✓ Command running in new terminal (parallel execution){Colors.RESET}"
+                )
                 print(f"{Colors.CYAN}   Output will be saved to: {output_file}{Colors.RESET}\n")
                 time.sleep(0.3)  # Small delay to allow terminal to open
             elif is_long_running_command(command) and not has_more_commands:
                 # Long-running but no more commands - execute normally with timeout
                 timeout = 180  # 3 minutes for long-running commands
-                print(f"{Colors.CYAN}⏱️  Detected long-running command. Will continue after {timeout}s if needed...{Colors.RESET}\n")
-                
+                print(
+                    f"{Colors.CYAN}⏱️  Detected long-running command. Will continue after {timeout}s if needed...{Colors.RESET}\n"
+                )
+
                 # Check if command exists
                 exists, tool_name = check_command_exists(command)
                 if not exists and tool_name:
-                    print(f"{Colors.YELLOW}⚠️  Warning: Tool '{tool_name}' may not be available{Colors.RESET}")
+                    print(
+                        f"{Colors.YELLOW}⚠️  Warning: Tool '{tool_name}' may not be available{Colors.RESET}"
+                    )
                     print(f"{Colors.YELLOW}Attempting to execute anyway...{Colors.RESET}\n")
-                
-                exit_code, output = execute_command_live(command, timeout=timeout, capture_output=True)
-                
+
+                exit_code, output = execute_command_live(
+                    command, timeout=timeout, capture_output=True
+                )
+
                 # Check for "command not found" errors
-                if exit_code == 127 or ('command not found' in output.lower() or '/bin/sh:' in output.lower()):
+                if exit_code == 127 or (
+                    "command not found" in output.lower() or "/bin/sh:" in output.lower()
+                ):
                     suggestion = suggest_alternative(command, output)
                     if suggestion:
                         print(f"{Colors.CYAN}💡 {suggestion}{Colors.RESET}\n")
-                
+
                 # Store in history
-                command_history.append({
-                    'command': command,
-                    'exit_code': exit_code,
-                    'output': output,
-                    'type': 'execute'
-                })
-                
+                command_history.append(
+                    {
+                        "command": command,
+                        "exit_code": exit_code,
+                        "output": output,
+                        "type": "execute",
+                    }
+                )
+
                 if exit_code != 0:
                     print(f"{Colors.YELLOW}⚠️  Command exited with code {exit_code}{Colors.RESET}")
                 print()  # Extra line for readability
             else:
                 # Normal command execution
                 # Check if this command should go to an existing controlled terminal
-                existing_terminal_id = find_controlled_terminal_for_command(command, command_history)
-                
+                existing_terminal_id = find_controlled_terminal_for_command(
+                    command, command_history
+                )
+
                 if existing_terminal_id:
                     # Send command to existing controlled terminal
-                    print(f"{Colors.CYAN}📤 Sending command to controlled terminal ({existing_terminal_id})...{Colors.RESET}\n")
+                    print(
+                        f"{Colors.CYAN}📤 Sending command to controlled terminal ({existing_terminal_id})...{Colors.RESET}\n"
+                    )
                     type_command(command)
                     if send_command_to_terminal(existing_terminal_id, command):
                         print(f"{Colors.GREEN}✓ Command sent to terminal{Colors.RESET}")
                         time.sleep(1)
                         output = read_terminal_output(existing_terminal_id)
-                        command_history.append({
-                            'command': command,
-                            'exit_code': 0,
-                            'output': output,
-                            'type': 'execute',
-                            'sent_to_terminal': existing_terminal_id
-                        })
+                        command_history.append(
+                            {
+                                "command": command,
+                                "exit_code": 0,
+                                "output": output,
+                                "type": "execute",
+                                "sent_to_terminal": existing_terminal_id,
+                            }
+                        )
                         if output:
                             print(f"{Colors.CYAN}Output from terminal:{Colors.RESET}")
                             print(output[-500:] if len(output) > 500 else output)
                         print()
                         continue
-                
+
                 # Check if it's an interactive command first
                 if is_interactive_command(command):
                     print(f"{Colors.YELLOW}⚠️  Detected interactive program{Colors.RESET}")
                     suggestion = suggest_non_interactive_alternative(command)
                     print(f"{Colors.CYAN}💡 {suggestion}{Colors.RESET}")
-                    print(f"{Colors.MAGENTA}🪟 Opening in new controlled terminal...{Colors.RESET}\n")
-                    
+                    print(
+                        f"{Colors.MAGENTA}🪟 Opening in new controlled terminal...{Colors.RESET}\n"
+                    )
+
                     # Open in new controlled terminal
                     type_command(command)
                     terminal_id = open_new_terminal(command, split=False)
-                    command_history.append({
-                        'command': command,
-                        'exit_code': 0,
-                        'output': 'Opened in new controlled terminal (interactive program)',
-                        'type': 'new_terminal',
-                        'interactive': True,
-                        'terminal_id': terminal_id,
-                        'controlled': True
-                    })
-                    print(f"{Colors.GREEN}✓ Interactive program opened in controlled terminal (ID: {terminal_id}){Colors.RESET}")
+                    command_history.append(
+                        {
+                            "command": command,
+                            "exit_code": 0,
+                            "output": "Opened in new controlled terminal (interactive program)",
+                            "type": "new_terminal",
+                            "interactive": True,
+                            "terminal_id": terminal_id,
+                            "controlled": True,
+                        }
+                    )
+                    print(
+                        f"{Colors.GREEN}✓ Interactive program opened in controlled terminal (ID: {terminal_id}){Colors.RESET}"
+                    )
                     print(f"{Colors.CYAN}   AI can send commands to this terminal{Colors.RESET}\n")
                     time.sleep(0.3)
                     continue
-                
+
                 timeout = 60  # Default 1 minute
-                
+
                 # Check if command exists before executing
                 exists, tool_name = check_command_exists(command)
                 if not exists and tool_name:
-                    print(f"{Colors.YELLOW}⚠️  Warning: Tool '{tool_name}' may not be available{Colors.RESET}")
+                    print(
+                        f"{Colors.YELLOW}⚠️  Warning: Tool '{tool_name}' may not be available{Colors.RESET}"
+                    )
                     print(f"{Colors.YELLOW}Attempting to execute anyway...{Colors.RESET}\n")
-                
-                exit_code, output = execute_command_live(command, timeout=timeout, capture_output=True)
-                
+
+                exit_code, output = execute_command_live(
+                    command, timeout=timeout, capture_output=True
+                )
+
                 # Extract subdomains/domains and add to /etc/hosts
                 subdomains = extract_subdomains_and_ips(output)
                 for subdomain_info in subdomains:
-                    domain = subdomain_info['domain']
-                    ip = subdomain_info['ip']
+                    domain = subdomain_info["domain"]
+                    ip = subdomain_info["ip"]
                     if add_to_hosts_file(domain, ip):
                         print(f"{Colors.GREEN}✓ Added {domain} -> {ip} to /etc/hosts{Colors.RESET}")
                     else:
-                        print(f"{Colors.YELLOW}⚠️  Could not add {domain} to /etc/hosts (may need sudo){Colors.RESET}")
-                
+                        print(
+                            f"{Colors.YELLOW}⚠️  Could not add {domain} to /etc/hosts (may need sudo){Colors.RESET}"
+                        )
+
                 # Check for "command not found" errors and suggest alternatives
-                if exit_code == 127 or ('command not found' in output.lower() or '/bin/sh:' in output.lower()):
+                if exit_code == 127 or (
+                    "command not found" in output.lower() or "/bin/sh:" in output.lower()
+                ):
                     suggestion = suggest_alternative(command, output)
                     if suggestion:
                         print(f"{Colors.CYAN}💡 {suggestion}{Colors.RESET}\n")
-                
+
                 # Store in history
-                command_history.append({
-                    'command': command,
-                    'exit_code': exit_code,
-                    'output': output,
-                    'type': 'execute',
-                    'subdomains_found': subdomains
-                })
-                
+                command_history.append(
+                    {
+                        "command": command,
+                        "exit_code": exit_code,
+                        "output": output,
+                        "type": "execute",
+                        "subdomains_found": subdomains,
+                    }
+                )
+
                 if exit_code != 0:
                     print(f"{Colors.YELLOW}⚠️  Command exited with code {exit_code}{Colors.RESET}")
                 print()  # Extra line for readability
-    
-    return command_history
 
+    return command_history

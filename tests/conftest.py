@@ -24,4 +24,3 @@ def mock_api_key(monkeypatch):
     test_key = "test-api-key-12345"
     monkeypatch.setenv("OPENAI_API_KEY", test_key)
     return test_key
-

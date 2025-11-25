@@ -14,4 +14,3 @@ def test_show_star_prompt():
         assert True
     except Exception as e:
         pytest.fail(f"show_star_prompt raised {e}")
-
