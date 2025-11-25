@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "terminal-ai"
+version = "0.1.0"
+description = "AI-powered terminal assistant that executes shell tasks from natural language instructions"
+readme = "README.md"
+requires-python = ">=3.7"
+license = {text = "MIT"}
+authors = [
+    {name = "Terminal_AI Contributors"}
+]
+keywords = ["terminal", "ai", "assistant", "automation", "cli", "openai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Topic :: System :: Shells",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Utilities",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+]
+dependencies = [
+    "openai>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+terminal-ai = "terminal_ai.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/yashwankhede/Terminal_AI"
+Documentation = "https://github.com/yashwankhede/Terminal_AI/blob/main/README.md"
+Repository = "https://github.com/yashwankhede/Terminal_AI"
+Issues = "https://github.com/yashwankhede/Terminal_AI/issues"
+
+[tool.setuptools]
+packages = ["terminal_ai"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --strict-markers --tb=short"
+
+[tool.black]
+line-length = 100
+target-version = ['py37', 'py38', 'py39', 'py310', 'py311']
+
+[tool.mypy]
+python_version = "3.7"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+

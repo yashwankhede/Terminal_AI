@@ -96,13 +96,23 @@ if [ -z "$API_KEY" ]; then
     echo -e "${YELLOW}You can set it later using: terminal-ai --set-api-key YOUR_KEY${NC}"
 else
     # Set API key using the tool itself
-    python3 "$SCRIPT_DIR/terminal_ai.py" --set-api-key "$API_KEY"
+    if [ -f "$SCRIPT_DIR/terminal_ai_cli.py" ]; then
+        python3 "$SCRIPT_DIR/terminal_ai_cli.py" --set-api-key "$API_KEY"
+    else
+        python3 -m terminal_ai.cli --set-api-key "$API_KEY"
+    fi
     echo -e "${GREEN}✓${NC} API key configured"
 fi
 
 # Make the script executable
 echo -e "${BLUE}[5/6]${NC} Setting up executable..."
-chmod +x "$SCRIPT_DIR/terminal_ai.py"
+if [ -f "$SCRIPT_DIR/terminal_ai_cli.py" ]; then
+    chmod +x "$SCRIPT_DIR/terminal_ai_cli.py"
+    EXECUTABLE="$SCRIPT_DIR/terminal_ai_cli.py"
+else
+    # Fallback to module execution
+    EXECUTABLE="python3 -m terminal_ai.cli"
+fi
 
 # Create symlink or copy to /usr/local/bin
 echo -e "${BLUE}[6/6]${NC} Installing to system PATH..."
@@ -119,8 +129,18 @@ if [ -L "$INSTALL_TARGET" ] || [ -f "$INSTALL_TARGET" ]; then
     $SUDO_CMD rm -f "$INSTALL_TARGET"
 fi
 
-# Create symlink
-$INSTALL_CMD "$SCRIPT_DIR/terminal_ai.py" "$INSTALL_TARGET"
+# Create symlink or wrapper script
+if [ -f "$SCRIPT_DIR/terminal_ai_cli.py" ]; then
+    # Create symlink to the CLI script
+    $INSTALL_CMD "$SCRIPT_DIR/terminal_ai_cli.py" "$INSTALL_TARGET"
+else
+    # Create a wrapper script for module execution
+    cat > "$INSTALL_TARGET" << 'EOF'
+#!/bin/bash
+python3 -m terminal_ai.cli "$@"
+EOF
+    $SUDO_CMD chmod +x "$INSTALL_TARGET"
+fi
 
 # Make sure it's executable
 $SUDO_CMD chmod +x "$INSTALL_TARGET"
@@ -171,11 +191,11 @@ if command -v "$BINARY_NAME" &> /dev/null || command -v terminal-ai &> /dev/null
     echo -e "${GREEN}Terminal AI is now installed!${NC}"
     echo ""
     echo -e "${BLUE}Usage examples:${NC}"
-    echo "  terminal-ai 'how do I list files?'"
+    echo "  terminal-ai 'list all files in current directory'"
     echo "  terminal-ai --interactive"
-    echo "  terminal-ai --execute 'show disk usage'"
+    echo "  terminal-ai -i"
     echo ""
-    echo -e "${YELLOW}Note:${NC} The --execute flag allows the tool to run commands."
+    echo -e "${YELLOW}Note:${NC} Commands execute automatically in interactive mode."
     echo -e "${YELLOW}      Use with caution and review commands before execution.${NC}"
 else
     echo -e "${YELLOW}Warning:${NC} Installation completed but command not found in PATH."

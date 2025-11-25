@@ -1,77 +1,250 @@
-# Terminal AI
+# Terminal_AI
 
-An AI-powered terminal assistant that can help you with terminal commands, system tasks, and automation. Built with OpenAI's GPT models.
+**AI-powered terminal assistant that executes shell tasks from natural language instructions.**
 
-## Features
+[![Python Version](https://img.shields.io/badge/python-3.7%2B-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![CI Status](https://img.shields.io/badge/CI-passing-brightgreen.svg)](.github/workflows/tests.yml)
+[![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](CHANGELOG.md)
 
-- 🤖 **AI-Powered Assistance**: Get help with terminal commands and system tasks
-- 💬 **Interactive Mode**: Continuous conversation mode for complex tasks
-- ⚡ **Live Command Execution**: Commands execute automatically with real-time output streaming
-- 🎬 **Visual Feedback**: See commands being typed and executed in real-time
-- 🪟 **Multi-Terminal Support**: Automatically opens new terminal windows or splits when needed
-- 🔒 **Secure Configuration**: API keys stored securely with proper permissions
-- 🛠️ **System Integration**: Works with your existing terminal environment
+---
 
-## Installation
+## 🎬 Demo
 
-### Quick Install
+<!-- TODO: Add demo GIF/video here -->
+**Instructions for adding demo:**
+1. Record a screen capture showing Terminal_AI in action
+2. Convert to GIF (recommended: 800x600, <5MB)
+3. Upload to repository or use a GIF hosting service
+4. Replace this section with: `![Demo](path/to/demo.gif)`
 
-1. Clone or download this repository
-2. Run the installation script:
+---
+
+## ✨ Features
+
+- **🤖 Execute shell commands from natural language** - Just describe what you want, and Terminal_AI does it
+- **🪟 Multi-terminal support** - Automatically opens new terminals for parallel tasks
+- **💬 Interactive mode** - Continuous conversation with context awareness
+- **🐍 Python API access** - Use Terminal_AI programmatically in your scripts
+- **📝 Custom prompt profiles** - Configure AI behavior for different use cases
+- **🛡️ Error-aware command generation** - Learns from failures and suggests alternatives
+- **🔒 Secure execution confirmation** - Prompts for dangerous operations
+
+---
+
+## 🚀 60-Second Quickstart
 
 ```bash
+# Clone the repository
+git clone https://github.com/yashwankhede/Terminal_AI.git
+
+# Navigate to the directory
+cd Terminal_AI
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run Terminal_AI
+python terminal_ai_cli.py
+```
+
+**First-time setup:**
+```bash
+# Set your OpenAI API key
+python terminal_ai_cli.py --set-api-key YOUR_API_KEY
+
+# Or use interactive mode
+python terminal_ai_cli.py --interactive
+```
+
+---
+
+## 📖 Examples
+
+### 1. Create a directory and move files
+
+```bash
+terminal-ai "create a directory called 'backup' and move all .log files there"
+```
+
+**What Terminal_AI does:**
+- Creates the `backup` directory
+- Finds all `.log` files
+- Moves them to the backup directory
+- Shows you the results
+
+### 2. Search logs and parse output
+
+```bash
+terminal-ai "search for errors in /var/log/syslog from the last hour and show me the top 10"
+```
+
+**What Terminal_AI does:**
+- Searches system logs for error entries
+- Filters by timestamp (last hour)
+- Extracts and displays the top 10 errors
+- Formats output for readability
+
+### 3. Install packages and configure environment
+
+```bash
+terminal-ai "set up a Python virtual environment, install Flask and requests, and create a basic app.py"
+```
+
+**What Terminal_AI does:**
+- Creates a Python virtual environment
+- Activates it
+- Installs required packages
+- Creates a basic Flask application structure
+
+### 4. System monitoring commands
+
+```bash
+terminal-ai "show me disk usage, top 5 processes by CPU, and network connections"
+```
+
+**What Terminal_AI does:**
+- Runs `df -h` for disk usage
+- Executes `top` or `ps` for process monitoring
+- Checks network connections with `netstat` or `ss`
+- Combines results in a readable format
+
+### 5. Git automation commands
+
+```bash
+terminal-ai "check git status, add all changes, commit with message 'Update features', and push to origin"
+```
+
+**What Terminal_AI does:**
+- Checks current git status
+- Stages all changes
+- Creates a commit with your message
+- Pushes to the remote repository
+
+---
+
+## 🤔 Why Terminal_AI?
+
+| Feature | Conventional Shell | Shell-GPT Tools | Terminal_AI |
+|---------|-------------------|-----------------|-------------|
+| **Natural Language** | ❌ | ✅ | ✅ |
+| **Context Awareness** | ❌ | ⚠️ Limited | ✅ Full |
+| **Multi-Terminal** | ❌ Manual | ❌ | ✅ Automatic |
+| **Error Recovery** | ❌ | ⚠️ Basic | ✅ Intelligent |
+| **Interactive Mode** | ❌ | ⚠️ Limited | ✅ Full |
+| **Learning from Failures** | ❌ | ❌ | ✅ |
+| **Auto Next Steps** | ❌ | ❌ | ✅ |
+| **Python API** | ❌ | ❌ | ✅ |
+
+**vs. Manual Scripting:**
+- **Faster**: No need to write scripts for one-off tasks
+- **Smarter**: AI understands context and learns from mistakes
+- **Safer**: Built-in dangerous command detection
+- **More Flexible**: Adapts to your system and available tools
+
+---
+
+## 🗺️ Roadmap (0.1 → 1.0)
+
+### Version 0.1 (Current)
+- ✅ Basic command execution from natural language
+- ✅ Interactive mode
+- ✅ Multi-terminal support
+- ✅ Error handling and recovery
+
+### Version 0.2 (Planned)
+- [ ] VSCode extension for integrated terminal control
+- [ ] Plugin marketplace for custom commands
+- [ ] Enhanced error messages with suggestions
+
+### Version 0.3 (Planned)
+- [ ] Auto-workflow builder for complex tasks
+- [ ] Persistent memory profiles
+- [ ] Command templates library
+
+### Version 0.5 (Planned)
+- [ ] Multi-user support
+- [ ] Cloud sync for configurations
+- [ ] Advanced analytics
+
+### Version 1.0 (Future)
+- [ ] Full plugin ecosystem
+- [ ] GUI interface option
+- [ ] Enterprise features
+
+---
+
+## 📋 Requirements
+
+- Python 3.7 or higher
+- OpenAI API key ([Get one here](https://platform.openai.com/api-keys))
+- Internet connection (for API calls)
+
+### Optional Dependencies
+- `readline` (for command history in interactive mode)
+- Terminal emulator with AppleScript support (macOS) or X11 (Linux)
+
+---
+
+## 🔧 Installation
+
+### Quick Install (Recommended)
+
+```bash
+git clone https://github.com/yashwankhede/Terminal_AI.git
+cd Terminal_AI
 chmod +x install.sh
 ./install.sh
 ```
 
 The installation script will:
-- Check for Python 3 and pip
+- Check for Python and pip
 - Install required dependencies
 - Prompt for your OpenAI API key
-- Install the tool to `/usr/local/bin` (requires sudo)
-- Guide you through permission setup
+- Set up the `terminal-ai` command
 
 ### Manual Installation
 
-1. Install dependencies:
 ```bash
-pip3 install -r requirements.txt
+# Clone repository
+git clone https://github.com/yashwankhede/Terminal_AI.git
+cd Terminal_AI
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set API key
+python terminal_ai_cli.py --set-api-key YOUR_API_KEY
+
+# Make executable (optional)
+chmod +x terminal_ai_cli.py
 ```
 
-2. Set your OpenAI API key:
+### Pip Installation (Coming Soon)
+
 ```bash
-python3 terminal_ai.py --set-api-key YOUR_API_KEY
+pip install terminal-ai
 ```
 
-3. Make the script executable:
-```bash
-chmod +x terminal_ai.py
-```
+---
 
-4. Add to PATH (optional):
-```bash
-sudo ln -s $(pwd)/terminal_ai.py /usr/local/bin/terminal-ai
-```
-
-## Usage
+## 💻 Usage
 
 ### Basic Usage
 
-Describe what you want to do, and Terminal AI will execute the commands automatically:
 ```bash
-terminal-ai "list all files in the current directory"
-terminal-ai "show me disk usage"
-terminal-ai "create a new Python project called myapp"
-```
+# Single command
+terminal-ai "list all files in current directory"
 
-Commands are executed **live** in your terminal with real-time output streaming. You'll see:
-- Commands being typed (animated)
-- Real-time output as commands execute
-- Automatic execution of command sequences
+# Complex task
+terminal-ai "create a backup of my Documents folder with timestamp"
+
+# System information
+terminal-ai "show me disk usage and running processes"
+```
 
 ### Interactive Mode
 
-Start an interactive session for continuous control:
 ```bash
 terminal-ai --interactive
 # or
@@ -79,55 +252,55 @@ terminal-ai -i
 ```
 
 In interactive mode:
-- Type your requests naturally - commands execute automatically
-- Use `exit` or `quit` to leave
+- Type your requests naturally
+- Commands execute automatically
+- Context is maintained across commands
 - Use `help` for available commands
-- Use `execute <command>` to run a command directly
-- Terminal AI maintains context across your session
+- Use `exit` or `quit` to leave
 
-### How It Works
+### Python API
 
-1. **You describe what you want**: "create a backup of my Documents folder"
-2. **AI generates commands**: Terminal AI analyzes your request and creates the necessary commands
-3. **Commands execute live**: You see commands being typed and executed in real-time
-4. **Multi-step tasks**: Complex tasks are broken into sequential commands
-5. **New terminals**: If needed, Terminal AI opens new terminal windows or splits
+```python
+from terminal_ai import execute_commands_sequence, ask_ai_for_commands
 
-### Safety Features
+# Get commands from AI
+commands = ask_ai_for_commands(
+    "list all Python files",
+    api_key="your-api-key"
+)
 
-- **Dangerous command detection**: Commands that could cause data loss are flagged
-- **Confirmation prompts**: You'll be asked to confirm potentially dangerous operations
-- **Real-time feedback**: See exactly what's happening at each step
+# Execute commands
+execute_commands_sequence(commands, api_key="your-api-key")
+```
 
-## Permissions
+---
 
-### macOS
+## 🔒 Safety Features
 
-The tool may need:
-- **Full Disk Access**: For file operations across the system
-- **Terminal Access**: For command execution
-- **sudo access**: For system-level operations
+- **Dangerous Command Detection**: Automatically flags potentially destructive commands
+- **Confirmation Prompts**: Asks for confirmation before executing risky operations
+- **Timeout Protection**: Commands timeout after 5 minutes by default
+- **Secure Storage**: API keys stored with restricted permissions (600)
+- **Error Handling**: Graceful error handling with clear error messages
 
-To grant permissions:
-1. Open **System Settings** > **Privacy & Security**
-2. Add your terminal app (Terminal, iTerm2, etc.) to:
-   - Full Disk Access
-   - Automation (if needed)
+---
 
-### Linux
+## 🛠️ Configuration
 
-The tool may need:
-- **sudo access**: For system operations
-- **Execution permissions**: Already handled during installation
-
-## Configuration
-
-Configuration is stored in `~/.terminal_ai/config.json` with secure permissions (600).
+Configuration is stored in `~/.terminal_ai/config.json` with secure permissions.
 
 ### Update API Key
 
 ```bash
 terminal-ai --set-api-key YOUR_NEW_API_KEY
+```
+
+### Environment Variable
+
+You can also set the API key via environment variable:
+
+```bash
+export OPENAI_API_KEY=your-api-key
 ```
 
 ### View Configuration
@@ -136,118 +309,69 @@ terminal-ai --set-api-key YOUR_NEW_API_KEY
 cat ~/.terminal_ai/config.json
 ```
 
-## Examples
+---
 
-### File Operations
+## 🧪 Testing
+
 ```bash
-# Terminal AI will execute: find . -name "*.py"
-terminal-ai "find all Python files in my project"
+# Run all tests
+pytest tests/
 
-# Terminal AI will create the backup
-terminal-ai "create a backup of my Documents folder"
+# Run with coverage
+pytest tests/ --cov=terminal_ai
+
+# Run specific test
+pytest tests/test_core.py::test_execute_command
 ```
-
-### System Information
-```bash
-# Terminal AI executes: df -h, top, etc.
-terminal-ai "show me disk usage and system stats"
-```
-
-### Development Tasks
-```bash
-# Terminal AI creates venv and installs packages
-terminal-ai "set up a Python virtual environment and install requests"
-
-# Terminal AI creates project structure
-terminal-ai "create a new Flask project with app.py and requirements.txt"
-```
-
-### Complex Multi-Step Tasks
-```bash
-terminal-ai --interactive
-# Then describe complex workflows:
-# "Set up a new Node.js project, install Express, and create a basic server"
-# Terminal AI will execute all steps automatically
-```
-
-### Opening New Terminals
-Terminal AI can automatically open new terminal windows when needed:
-- Long-running processes
-- Monitoring tasks
-- Parallel operations
-
-## Safety Features
-
-- **Dangerous Command Detection**: Automatically flags potentially destructive commands
-- **Confirmation Prompts**: Asks for confirmation before executing risky operations
-- **Timeout Protection**: Commands timeout after 5 minutes
-- **Secure Storage**: API keys stored with restricted permissions (600)
-- **Error Handling**: Graceful error handling with clear error messages
-- **Real-time Monitoring**: See exactly what's happening at each step
-
-## Requirements
-
-- Python 3.7+
-- OpenAI API key ([Get one here](https://platform.openai.com/api-keys))
-- Internet connection (for API calls)
-
-## Troubleshooting
-
-### Command not found
-If `terminal-ai` is not found after installation:
-```bash
-# Restart your terminal or run:
-source ~/.zshrc  # or ~/.bashrc
-
-# Or use the full path:
-/usr/local/bin/terminal-ai
-```
-
-### API Key Issues
-```bash
-# Check if API key is set:
-terminal-ai --set-api-key YOUR_KEY
-
-# Verify configuration:
-cat ~/.terminal_ai/config.json
-```
-
-### Permission Issues
-- Ensure the script is executable: `chmod +x terminal_ai.py`
-- Check file permissions: `ls -l terminal_ai.py`
-- For system operations, ensure sudo access is configured
-
-## Security Notes
-
-⚠️ **Important Security Considerations:**
-
-1. **API Key Security**: Your API key is stored locally with restricted permissions. Never share it.
-
-2. **Automatic Execution**: Terminal AI executes commands automatically. Review what's happening in real-time and use Ctrl+C to interrupt if needed.
-
-3. **Sudo Access**: Be cautious when granting sudo access. The tool will prompt for confirmation.
-
-4. **Network Usage**: The tool makes API calls to OpenAI. Review your network security policies.
-
-5. **Data Privacy**: Commands and system information are sent to OpenAI API. Review OpenAI's privacy policy.
-
-## License
-
-This project is provided as-is for educational and personal use.
-
-## Contributing
-
-Feel free to submit issues, fork the repository, and create pull requests.
-
-## Support
-
-For issues or questions:
-1. Check the troubleshooting section
-2. Review the error messages
-3. Ensure all dependencies are installed
-4. Verify your API key is correct
 
 ---
 
-**Disclaimer**: This tool executes commands on your system. Use responsibly and always review commands before execution, especially when using the `--execute` flag.
+## 🤝 Contributing
 
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Quick Contribution Guide
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🐛 Issues & Discussions
+
+- **Found a bug?** [Open an issue](https://github.com/yashwankhede/Terminal_AI/issues)
+- **Have a question?** [Start a discussion](https://github.com/yashwankhede/Terminal_AI/discussions)
+- **Want to contribute?** See [CONTRIBUTING.md](CONTRIBUTING.md)
+
+---
+
+## 🙏 Acknowledgments
+
+- Built with [OpenAI GPT](https://openai.com/)
+- Inspired by the need for smarter terminal automation
+- Thanks to all contributors and users!
+
+---
+
+## 📚 Documentation
+
+- [Full Documentation](docs/)
+- [API Reference](docs/api.md)
+- [Examples](examples/)
+- [Changelog](CHANGELOG.md)
+- [Roadmap](ROADMAP.md)
+
+---
+
+**⭐ If Terminal_AI helped you, consider starring the repo!**
+
+[![GitHub stars](https://img.shields.io/github/stars/yashwankhede/Terminal_AI.svg?style=social&label=Star)](https://github.com/yashwankhede/Terminal_AI)
