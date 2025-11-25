@@ -88,6 +88,7 @@ def set_api_key(api_key: str) -> None:
 
 def is_first_run() -> bool:
     """Check if this is the first run of Terminal AI"""
+    CONFIG_DIR.mkdir(exist_ok=True)
     first_run_file = CONFIG_DIR / ".first_run"
     if not first_run_file.exists():
         first_run_file.touch()
