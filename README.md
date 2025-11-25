@@ -176,7 +176,7 @@ terminal-ai "check git status, add all changes, commit with message 'Update feat
 
 ## 📋 Requirements
 
-- Python 3.7 or higher
+- Python 3.8 or higher
 - OpenAI API key ([Get one here](https://platform.openai.com/api-keys))
 - Internet connection (for API calls)
 
