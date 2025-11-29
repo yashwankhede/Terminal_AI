@@ -221,7 +221,7 @@ def create_terminal_control_system(terminal_id: str) -> Dict[str, Path]:
 
 
 def get_terminal_wrapper_script(
-    control_files: Dict[str, Path], initial_command: Optional[str] = None
+    control_files: Dict[str, Path], initial_command: Optional[str] = None, ssh_password: Optional[str] = None
 ) -> str:
     """Generate a wrapper script that reads commands from control file"""
     cmd_file = control_files["command_file"]
@@ -244,18 +244,31 @@ def get_terminal_wrapper_script(
         if match:
             ssh_user = match.group(1)
             ssh_host = match.group(2)
-            # Extract password if available (from sshpass or context)
-            password = ""
-            if "sshpass" in initial_command.lower():
+            # Extract password if available (from sshpass, parameter, or context)
+            password = ssh_password or ""
+            if not password and "sshpass" in initial_command.lower():
                 # Try to extract password from sshpass command
                 pass_match = re.search(r"sshpass\s+-p\s+['\"]?([^'\"]+)['\"]?", initial_command, re.IGNORECASE)
                 if pass_match:
                     password = pass_match.group(1)
             
+            # Escape password for expect (escape special characters)
+            if password:
+                # Escape for expect: escape $, [, ], {, }, \, ", and spaces
+                escaped_password = password.replace("\\", "\\\\").replace("$", "\\$").replace("[", "\\[").replace("]", "\\]").replace("{", "\\{").replace("}", "\\}").replace('"', '\\"')
+            else:
+                escaped_password = ""
+            
             # Escape initial command for expect
             escaped_ssh_cmd = initial_command.replace('"', '\\"').replace('$', '\\$')
             newline_char = "\\n"
             return_char = "\\r"
+            
+            # Set password variable in expect script (must be set before use)
+            if escaped_password:
+                password_set_cmd = f'set password "{escaped_password}"'
+            else:
+                password_set_cmd = 'set password ""'
             
             wrapper = f"""#!/usr/bin/expect -f
 # Terminal AI Control Wrapper for SSH
@@ -265,6 +278,9 @@ set timeout 30
 set CMD_FILE "{cmd_file_str}"
 set OUT_FILE "{out_file_str}"
 set STATUS_FILE "{status_file_str}"
+
+# Set password variable
+{password_set_cmd}
 
 # Open output file
 set out_fd [open "$OUT_FILE" a]
@@ -285,7 +301,7 @@ log_output "Spawning SSH: {escaped_ssh_cmd}"
 spawn -noecho bash -c "{escaped_ssh_cmd}"
 
 # Handle password prompt if needed
-if {{"$password" != ""}} {{
+if {{$password != ""}} {{
     expect {{
         "password:" {{
             send "$password{return_char}"
@@ -300,11 +316,21 @@ if {{"$password" != ""}} {{
             log_output "SSH connected successfully"
         }}
         timeout {{
-            log_output "Timeout waiting for SSH prompt"
+            log_output "Timeout waiting for SSH prompt - trying without password"
+            # Try to continue anyway
         }}
     }}
 }} else {{
     expect {{
+        "password:" {{
+            log_output "Password prompt detected but no password provided"
+            # Wait a bit and continue
+            sleep 2
+        }}
+        "Password:" {{
+            log_output "Password prompt detected but no password provided"
+            sleep 2
+        }}
         -re ".*@.*[:$] " {{
             log_output "SSH connected successfully"
         }}
@@ -426,7 +452,7 @@ def open_new_terminal(
     control_files = create_terminal_control_system(terminal_id)
 
     # Generate wrapper script
-    wrapper_script = get_terminal_wrapper_script(control_files, command)
+    wrapper_script = get_terminal_wrapper_script(control_files, command, ssh_password=ssh_password)
     
     # Determine file extension and executor based on whether it's expect or bash
     is_ssh = command and "ssh" in command.lower() and "@" in command
@@ -442,6 +468,31 @@ def open_new_terminal(
     os.chmod(wrapper_file, 0o755)
 
     # Command to run in new terminal
+    # Add error handling wrapper
+    if is_ssh:
+        # Check if expect is available, if not fall back
+        try:
+            result = subprocess.run(["which", "expect"], capture_output=True, timeout=2, check=False)
+            if result.returncode != 0:
+                logger.warning("expect not found, using bash wrapper instead")
+                # Regenerate as bash wrapper
+                wrapper_script = get_terminal_wrapper_script(control_files, command, ssh_password=None)
+                wrapper_file = control_files["command_file"].parent / f"{terminal_id}_wrapper.sh"
+                wrapper_exec = "bash"
+                with open(wrapper_file, "w") as f:
+                    f.write(wrapper_script)
+                os.chmod(wrapper_file, 0o755)
+                is_ssh = False
+        except Exception as e:
+            logger.warning(f"Error checking expect: {e}, using bash wrapper")
+            wrapper_script = get_terminal_wrapper_script(control_files, command, ssh_password=None)
+            wrapper_file = control_files["command_file"].parent / f"{terminal_id}_wrapper.sh"
+            wrapper_exec = "bash"
+            with open(wrapper_file, "w") as f:
+                f.write(wrapper_script)
+            os.chmod(wrapper_file, 0o755)
+            is_ssh = False
+    
     terminal_command = f"{wrapper_exec} {wrapper_file}"
 
     if sys.platform == "darwin":
@@ -1068,8 +1119,11 @@ def execute_commands_sequence(
     if command_history is None:
         command_history = []
 
-    # Extract SSH credentials from user context
+    # Extract SSH credentials from user context (store for use in terminal opening)
     ssh_credentials = extract_ssh_credentials(user_context) if user_context else None
+    # Store globally for use in terminal opening
+    global global_ssh_credentials
+    global_ssh_credentials = ssh_credentials
 
     print(f"\n{Colors.BOLD}{Colors.BLUE}🤖 Terminal AI is executing commands...{Colors.RESET}\n")
 
@@ -1141,7 +1195,9 @@ def execute_commands_sequence(
                         f"{Colors.YELLOW}⚠️  sshpass not available. Opening SSH in new terminal to avoid password prompt hang...{Colors.RESET}\n"
                     )
                     type_command(original_command)
-                    terminal_id = open_new_terminal(original_command, split=False)
+                    # Pass SSH password to wrapper script
+                    ssh_pass = ssh_credentials.get("password") if ssh_credentials else None
+                    terminal_id = open_new_terminal(original_command, split=False, ssh_password=ssh_pass)
                     # Extract SSH host info
                     ssh_host = None
                     ssh_user = None
