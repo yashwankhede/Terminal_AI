@@ -325,7 +325,7 @@ if {{$password != ""}} {{
             send "$password{return_char}"
             exp_continue
         }}
-        -re ".*@.*[:$] " {{
+        -re {{.*@.*[:\$] }} {{
             # SSH prompt detected
             log_output "SSH connected successfully"
         }}
@@ -376,7 +376,7 @@ while {{1}} {{
                     log_output "Sending command: $line"
                     send "$line{return_char}"
                     expect {{
-                        -re ".*@.*[:$] " {{
+                        -re {{.*@.*[:\$] }} {{
                             # Command completed, got prompt back
                             log_output "Command completed"
                         }}
