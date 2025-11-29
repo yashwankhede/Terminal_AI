@@ -496,6 +496,62 @@ def find_controlled_terminal_for_command(
             if entry.get("controlled") and entry.get("interactive"):
                 if "msfconsole" in entry.get("command", "").lower():
                     return entry.get("terminal_id")
+    
+    # Check if command should go to an SSH session
+    # If there's an active SSH terminal, route most commands there
+    ssh_terminal = None
+    for entry in reversed(command_history):
+        if entry.get("controlled") and entry.get("terminal_id"):
+            cmd = entry.get("command", "").lower()
+            # Check if this is an SSH terminal
+            if "ssh" in cmd and "@" in cmd:
+                ssh_terminal = entry.get("terminal_id")
+                ssh_host = None
+                # Extract host from SSH command
+                import re
+                match = re.search(r"ssh\s+[^\s@]+@([^\s]+)", cmd)
+                if match:
+                    ssh_host = match.group(1)
+                break
+    
+    # If we have an SSH terminal, check if command should go there
+    if ssh_terminal:
+        # Commands that should ALWAYS go to SSH (file operations, system commands, etc.)
+        ssh_commands = [
+            "find", "grep", "cat", "ls", "cd", "pwd", "whoami", "id",
+            "ps", "netstat", "ss", "ifconfig", "ip", "uname", "hostname",
+            "sudo", "su", "python", "python3", "bash", "sh", "nc", "netcat",
+            "wget", "curl", "base64", "echo", "export", "env",
+        ]
+        
+        # Check if command looks like it should run on remote system
+        should_route_to_ssh = False
+        
+        # Explicit indicators - flag files
+        if any(cmd in command_lower for cmd in ["user.txt", "root.txt", "flag", "proof.txt", "note.txt"]):
+            should_route_to_ssh = True
+            logger.info(f"Routing to SSH (flag file detected): {command}")
+        # File paths that suggest remote system (but not local paths)
+        elif any(path in command for path in ["/home/", "/root/", "/tmp/", "/var/", "/opt/", "/usr/local/"]):
+            # Exclude local indicators
+            if not any(local in command_lower for local in ["localhost", "127.0.0.1", "local", "~/.", "$HOME", "./"]):
+                should_route_to_ssh = True
+                logger.info(f"Routing to SSH (remote path detected): {command}")
+        # Commands that are typically run on remote systems
+        elif command_lower.split() and command_lower.split()[0] in ssh_commands:
+            # But not if it's clearly a local command
+            if not any(local in command_lower for local in ["localhost", "127.0.0.1", "local", "~/.", "$HOME", "./", "nmap", "gobuster"]):
+                should_route_to_ssh = True
+                logger.info(f"Routing to SSH (system command detected): {command}")
+        # If command doesn't look like a local tool (nmap, gobuster, etc.), route to SSH
+        elif not any(tool in command_lower.split()[0] if command_lower.split() else False for tool in ["nmap", "gobuster", "dirsearch", "ffuf", "hydra", "enum4linux", "kerbrute"]):
+            # Default: if we have an active SSH session and command doesn't look local, route to SSH
+            should_route_to_ssh = True
+            logger.info(f"Routing to SSH (default for active session): {command}")
+        
+        if should_route_to_ssh:
+            logger.info(f"Routing command to SSH terminal: {ssh_terminal}")
+            return ssh_terminal
 
     return None
 
@@ -684,13 +740,25 @@ def ask_ai_for_commands(
     # Build context from command history
     history_context = ""
     failed_commands = []
+    active_ssh_session = None
     if command_history:
         history_context = "\n\nPREVIOUS COMMANDS AND OUTPUTS:\n"
         history_context += "=" * 60 + "\n"
         for i, entry in enumerate(command_history[-10:], 1):  # Last 10 commands
             cmd = entry.get("command", "N/A")
             exit_code = entry.get("exit_code", "N/A")
-            history_context += f"\nCommand {i}: {cmd}\n"
+            
+            # Check for active SSH session
+            if entry.get("ssh_session") and entry.get("controlled"):
+                active_ssh_session = {
+                    "host": entry.get("ssh_host", "unknown"),
+                    "user": entry.get("ssh_user", "unknown"),
+                    "terminal_id": entry.get("terminal_id"),
+                }
+                history_context += f"\nCommand {i}: {cmd} [SSH SESSION ACTIVE - Commands will route here]\n"
+            else:
+                history_context += f"\nCommand {i}: {cmd}\n"
+            
             history_context += f"Exit Code: {exit_code}\n"
 
             # Track failed commands
@@ -704,6 +772,19 @@ def ask_ai_for_commands(
                     output = output[:3000] + "\n... (output truncated)"
                 history_context += f"Output:\n{output}\n"
             history_context += "-" * 60 + "\n"
+    
+    # Add SSH session context if active
+    ssh_session_context = ""
+    if active_ssh_session:
+        ssh_session_context = f"\n\n⚠️ ACTIVE SSH SESSION DETECTED:\n"
+        ssh_session_context += f"Connected to: {active_ssh_session['user']}@{active_ssh_session['host']}\n"
+        ssh_session_context += f"Terminal ID: {active_ssh_session['terminal_id']}\n"
+        ssh_session_context += f"\nIMPORTANT: All subsequent commands (find, cat, ls, grep, etc.) will AUTOMATICALLY be routed to this SSH session.\n"
+        ssh_session_context += f"You should use commands as if you're already on the remote system. For example:\n"
+        ssh_session_context += f"- Use: find / -name user.txt (NOT: ssh user@host 'find / -name user.txt')\n"
+        ssh_session_context += f"- Use: cat /home/user/flag (NOT: ssh user@host 'cat /home/user/flag')\n"
+        ssh_session_context += f"- Use: ls -la /home (NOT: ssh user@host 'ls -la /home')\n"
+        ssh_session_context += f"The system will automatically send these commands to the SSH session.\n"
 
     # Analyze previous outputs for key information
     key_findings = ""
@@ -771,6 +852,8 @@ Available Wordlists:
 
 {history_context}
 
+{ssh_session_context}
+
 {key_findings}
 
 {failed_context}
@@ -813,6 +896,13 @@ CRITICAL INSTRUCTIONS:
 22. **SSH AUTHENTICATION**: If SSH credentials are provided in the user's request, use regular SSH commands (e.g., ssh user@host)
     - The system will automatically convert them to use 'sshpass' for non-interactive authentication
     - You don't need to manually add sshpass - just use normal SSH commands
+23. **SSH SESSIONS - CRITICAL**: When SSH is opened in a controlled terminal, ALL SUBSEQUENT COMMANDS should run on the remote system:
+    - After SSH connection is established, commands like "find / -name user.txt", "cat /home/user/flag", "ls -la /home", etc. will AUTOMATICALLY be routed to the SSH session
+    - You don't need to prefix commands with "ssh user@host" - just use the commands directly
+    - The system automatically detects when commands should run on the remote system vs local
+    - If you see "Opened in new controlled terminal" for SSH, that means subsequent commands will go there automatically
+    - Commands that look like they should run on remote (file operations, system commands, flag searches) will be sent to the SSH session
+    - When looking for flags (user.txt, root.txt), searching files, or running system commands after SSH, just use the commands directly - they'll be routed correctly
 {ssh_context}
 
 User's request: {prompt}
@@ -922,6 +1012,19 @@ def execute_commands_sequence(
                     )
                     type_command(original_command)
                     terminal_id = open_new_terminal(original_command, split=False)
+                    # Extract SSH host info
+                    ssh_host = None
+                    ssh_user = None
+                    if ssh_credentials:
+                        ssh_host = ssh_credentials.get("host")
+                        ssh_user = ssh_credentials.get("user")
+                    else:
+                        # Try to extract from command
+                        match = re.search(r"ssh\s+([^\s@]+)@([^\s]+)", original_command, re.IGNORECASE)
+                        if match:
+                            ssh_user = match.group(1)
+                            ssh_host = match.group(2)
+                    
                     command_history.append(
                         {
                             "command": original_command,
@@ -930,6 +1033,9 @@ def execute_commands_sequence(
                             "type": "new_terminal",
                             "terminal_id": terminal_id,
                             "controlled": True,
+                            "ssh_session": True,
+                            "ssh_host": ssh_host,
+                            "ssh_user": ssh_user,
                         }
                     )
                     print(
@@ -1032,6 +1138,14 @@ def execute_commands_sequence(
                     )
                     type_command(command)
                     terminal_id = open_new_terminal(command, split=False)
+                    # Extract SSH host info
+                    ssh_host = None
+                    ssh_user = None
+                    match = re.search(r"ssh\s+([^\s@]+)@([^\s]+)", command, re.IGNORECASE)
+                    if match:
+                        ssh_user = match.group(1)
+                        ssh_host = match.group(2)
+                    
                     command_history.append(
                         {
                             "command": command,
@@ -1040,6 +1154,9 @@ def execute_commands_sequence(
                             "type": "new_terminal",
                             "terminal_id": terminal_id,
                             "controlled": True,
+                            "ssh_session": True,
+                            "ssh_host": ssh_host,
+                            "ssh_user": ssh_user,
                         }
                     )
                     print(
