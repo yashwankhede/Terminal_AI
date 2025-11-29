@@ -233,14 +233,135 @@ def get_terminal_wrapper_script(
     out_file_str = str(out_file).replace("'", "'\\''")
     status_file_str = str(status_file).replace("'", "'\\''")
 
-    # Escape initial command for bash
-    if initial_command:
-        escaped_init_cmd = initial_command.replace("'", "'\\''")
-        init_cmd_part = f'execute_command "{escaped_init_cmd}"'
-    else:
-        init_cmd_part = ""
+    # Check if initial command is SSH
+    is_ssh = initial_command and "ssh" in initial_command.lower() and "@" in initial_command
+    
+    if is_ssh:
+        # For SSH, use expect to handle the interactive session
+        # Extract SSH details
+        import re
+        match = re.search(r"ssh\s+([^\s@]+)@([^\s]+)", initial_command, re.IGNORECASE)
+        if match:
+            ssh_user = match.group(1)
+            ssh_host = match.group(2)
+            # Extract password if available (from sshpass or context)
+            password = ""
+            if "sshpass" in initial_command.lower():
+                # Try to extract password from sshpass command
+                pass_match = re.search(r"sshpass\s+-p\s+['\"]?([^'\"]+)['\"]?", initial_command, re.IGNORECASE)
+                if pass_match:
+                    password = pass_match.group(1)
+            
+            # Escape initial command for expect
+            escaped_ssh_cmd = initial_command.replace('"', '\\"').replace('$', '\\$')
+            newline_char = "\\n"
+            return_char = "\\r"
+            
+            wrapper = f"""#!/usr/bin/expect -f
+# Terminal AI Control Wrapper for SSH
+# Uses expect to handle SSH interactive session
 
-    wrapper = f"""#!/bin/bash
+set timeout 30
+set CMD_FILE "{cmd_file_str}"
+set OUT_FILE "{out_file_str}"
+set STATUS_FILE "{status_file_str}"
+
+# Open output file
+set out_fd [open "$OUT_FILE" a]
+
+proc log_output {{msg}} {{
+    global out_fd
+    puts $out_fd "[clock seconds] $msg"
+    flush $out_fd
+}}
+
+# Write status
+set status_fd [open "$STATUS_FILE" w]
+puts $status_fd "READY"
+close $status_fd
+
+# Spawn SSH connection
+log_output "Spawning SSH: {escaped_ssh_cmd}"
+spawn -noecho bash -c "{escaped_ssh_cmd}"
+
+# Handle password prompt if needed
+if {{"$password" != ""}} {{
+    expect {{
+        "password:" {{
+            send "$password{return_char}"
+            exp_continue
+        }}
+        "Password:" {{
+            send "$password{return_char}"
+            exp_continue
+        }}
+        -re ".*@.*[:$] " {{
+            # SSH prompt detected
+            log_output "SSH connected successfully"
+        }}
+        timeout {{
+            log_output "Timeout waiting for SSH prompt"
+        }}
+    }}
+}} else {{
+    expect {{
+        -re ".*@.*[:$] " {{
+            log_output "SSH connected successfully"
+        }}
+        timeout {{
+            log_output "Timeout waiting for SSH prompt"
+        }}
+    }}
+}}
+
+# Main loop - read commands from control file and send to SSH
+set LAST_LINE_COUNT 0
+while {{1}} {{
+    if {{[file exists "$CMD_FILE"]}} {{
+        set fd [open "$CMD_FILE" r]
+        set lines [split [read $fd] "{newline_char}"]
+        close $fd
+        
+        set CURRENT_LINE_COUNT [llength $lines]
+        if {{$CURRENT_LINE_COUNT > $LAST_LINE_COUNT}} {{
+            for {{set i $LAST_LINE_COUNT}} {{$i < $CURRENT_LINE_COUNT}} {{incr i}} {{
+                set line [string trim [lindex $lines $i]]
+                if {{$line != ""}} {{
+                    log_output "Sending command: $line"
+                    send "$line{return_char}"
+                    expect {{
+                        -re ".*@.*[:$] " {{
+                            # Command completed, got prompt back
+                            log_output "Command completed"
+                        }}
+                        timeout {{
+                            log_output "Timeout waiting for command completion"
+                        }}
+                    }}
+                }}
+            }}
+            set LAST_LINE_COUNT $CURRENT_LINE_COUNT
+        }}
+    }}
+    sleep 0.5
+}}
+
+close $out_fd
+"""
+        else:
+            # Fallback to regular wrapper if SSH parsing fails
+            is_ssh = False
+    
+    if not is_ssh:
+        # Regular wrapper for non-SSH commands
+        # Escape initial command for bash
+        if initial_command:
+            escaped_init_cmd = initial_command.replace("'", "'\\''")
+            init_cmd_part = f'execute_command "{escaped_init_cmd}"'
+        else:
+            init_cmd_part = ""
+
+        wrapper = f"""#!/bin/bash
 # Terminal AI Control Wrapper
 # This script reads commands from control file and executes them
 
@@ -284,6 +405,7 @@ while true; do
     sleep 0.5
 done
 """
+    
     return wrapper
 
 
@@ -305,14 +427,22 @@ def open_new_terminal(
 
     # Generate wrapper script
     wrapper_script = get_terminal_wrapper_script(control_files, command)
-    wrapper_file = control_files["command_file"].parent / f"{terminal_id}_wrapper.sh"
+    
+    # Determine file extension and executor based on whether it's expect or bash
+    is_ssh = command and "ssh" in command.lower() and "@" in command
+    if is_ssh:
+        wrapper_file = control_files["command_file"].parent / f"{terminal_id}_wrapper.exp"
+        wrapper_exec = "expect"
+    else:
+        wrapper_file = control_files["command_file"].parent / f"{terminal_id}_wrapper.sh"
+        wrapper_exec = "bash"
 
     with open(wrapper_file, "w") as f:
         f.write(wrapper_script)
     os.chmod(wrapper_file, 0o755)
 
     # Command to run in new terminal
-    terminal_command = f"bash {wrapper_file}"
+    terminal_command = f"{wrapper_exec} {wrapper_file}"
 
     if sys.platform == "darwin":
         # macOS - try to detect terminal app
