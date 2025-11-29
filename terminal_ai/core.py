@@ -460,6 +460,7 @@ def open_new_terminal(
     split: bool = False,
     output_file: Optional[str] = None,
     terminal_id: Optional[str] = None,
+    ssh_password: Optional[str] = None,
 ) -> str:
     """
     Open a new terminal window with AI control capability
@@ -471,7 +472,7 @@ def open_new_terminal(
     # Create control system
     control_files = create_terminal_control_system(terminal_id)
 
-    # Generate wrapper script
+    # Generate wrapper script (pass ssh_password if provided)
     wrapper_script = get_terminal_wrapper_script(control_files, command, ssh_password=ssh_password)
     
     # Determine file extension and executor based on whether it's expect or bash
@@ -1343,7 +1344,11 @@ def execute_commands_sequence(
                         f"{Colors.YELLOW}⚠️  SSH command detected without credentials. Opening in new terminal to avoid password prompt hang...{Colors.RESET}\n"
                     )
                     type_command(command)
-                    terminal_id = open_new_terminal(command, split=False)
+                    # Try to extract password from user context
+                    from terminal_ai.utils import extract_ssh_credentials
+                    ssh_creds = extract_ssh_credentials(user_context) if user_context else None
+                    ssh_pass = ssh_creds.get("password") if ssh_creds else None
+                    terminal_id = open_new_terminal(command, split=False, ssh_password=ssh_pass)
                     # Extract SSH host info
                     ssh_host = None
                     ssh_user = None
