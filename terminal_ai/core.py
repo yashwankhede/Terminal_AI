@@ -296,9 +296,23 @@ set status_fd [open "$STATUS_FILE" w]
 puts $status_fd "READY"
 close $status_fd
 
+# Error handling proc
+proc handle_error {{msg}} {{
+    global STATUS_FILE OUT_FILE
+    set status_fd [open "$STATUS_FILE" w]
+    puts $status_fd "ERROR: $msg"
+    close $status_fd
+    set out_fd [open "$OUT_FILE" a]
+    puts $out_fd "[clock seconds] ERROR: $msg"
+    close $out_fd
+    exit 1
+}}
+
 # Spawn SSH connection
 log_output "Spawning SSH: {escaped_ssh_cmd}"
-spawn -noecho bash -c "{escaped_ssh_cmd}"
+if {{[catch {{spawn -noecho bash -c "{escaped_ssh_cmd}"}} error]}} {{
+    handle_error "Failed to spawn SSH: $error"
+}}
 
 # Handle password prompt if needed
 if {{$password != ""}} {{
@@ -336,8 +350,14 @@ if {{$password != ""}} {{
         }}
         timeout {{
             log_output "Timeout waiting for SSH prompt"
+            # Don't exit, try to continue
         }}
     }}
+}}
+
+# Check if spawn was successful
+if {{$spawn_id == 0}} {{
+    handle_error "SSH spawn failed"
 }}
 
 # Main loop - read commands from control file and send to SSH
@@ -1356,29 +1376,61 @@ def execute_commands_sequence(
                 )
 
                 if existing_terminal_id:
-                    # Send command to existing controlled terminal
-                    print(
-                        f"{Colors.CYAN}📤 Sending command to controlled terminal ({existing_terminal_id})...{Colors.RESET}\n"
-                    )
-                    type_command(command)
-                    if send_command_to_terminal(existing_terminal_id, command):
-                        print(f"{Colors.GREEN}✓ Command sent to terminal{Colors.RESET}")
-                        time.sleep(1)
-                        output = read_terminal_output(existing_terminal_id)
-                        command_history.append(
-                            {
-                                "command": command,
-                                "exit_code": 0,
-                                "output": output,
-                                "type": "execute",
-                                "sent_to_terminal": existing_terminal_id,
-                            }
+                    # Check if terminal is still active
+                    terminal_status = get_terminal_status(existing_terminal_id)
+                    if terminal_status == "not_found" or terminal_status == "error":
+                        logger.warning(f"Terminal {existing_terminal_id} not found or has error, will execute locally")
+                        # Remove from controlled terminals
+                        if existing_terminal_id in controlled_terminals:
+                            del controlled_terminals[existing_terminal_id]
+                        # Fall through to normal execution
+                    else:
+                        # Send command to existing controlled terminal
+                        print(
+                            f"{Colors.CYAN}📤 Sending command to controlled terminal ({existing_terminal_id})...{Colors.RESET}\n"
                         )
-                        if output:
-                            print(f"{Colors.CYAN}Output from terminal:{Colors.RESET}")
-                            print(output[-500:] if len(output) > 500 else output)
-                        print()
-                        continue
+                        type_command(command)
+                        if send_command_to_terminal(existing_terminal_id, command):
+                            print(f"{Colors.GREEN}✓ Command sent to terminal{Colors.RESET}")
+                            time.sleep(1)
+                            output = read_terminal_output(existing_terminal_id)
+                            
+                            # Check if we got output or if terminal might have errors
+                            if not output or "error" in output.lower() or "failed" in output.lower():
+                                # Check terminal status file for errors
+                                if existing_terminal_id in controlled_terminals:
+                                    control_files = controlled_terminals[existing_terminal_id]["control_files"]
+                                    status_file = control_files["status_file"]
+                                    if status_file.exists():
+                                        status = status_file.read_text().strip()
+                                        if "error" in status.lower() or "failed" in status.lower():
+                                            logger.warning(f"Terminal {existing_terminal_id} has errors, executing locally instead")
+                                            # Remove from controlled and execute locally
+                                            del controlled_terminals[existing_terminal_id]
+                                            # Fall through to normal execution
+                                            existing_terminal_id = None
+                            
+                            if existing_terminal_id:  # Still valid
+                                command_history.append(
+                                    {
+                                        "command": command,
+                                        "exit_code": 0,
+                                        "output": output,
+                                        "type": "execute",
+                                        "sent_to_terminal": existing_terminal_id,
+                                    }
+                                )
+                                if output:
+                                    print(f"{Colors.CYAN}Output from terminal:{Colors.RESET}")
+                                    print(output[-500:] if len(output) > 500 else output)
+                                print()
+                                continue
+                        else:
+                            logger.warning(f"Failed to send command to terminal {existing_terminal_id}, executing locally")
+                            # Remove from controlled terminals
+                            if existing_terminal_id in controlled_terminals:
+                                del controlled_terminals[existing_terminal_id]
+                            # Fall through to normal execution
 
                 # Check if it's an interactive command first
                 if is_interactive_command(command):
