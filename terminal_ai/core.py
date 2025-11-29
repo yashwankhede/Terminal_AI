@@ -32,7 +32,17 @@ from terminal_ai.utils import (
     get_available_tools,
     suggest_alternative,
     get_system_info,
+    extract_ssh_credentials,
+    convert_ssh_to_sshpass,
 )
+
+# Try to import interactive handler
+try:
+    from terminal_ai.interactive import execute_command_interactive, PEXPECT_AVAILABLE
+    INTERACTIVE_HANDLER_AVAILABLE = PEXPECT_AVAILABLE
+except ImportError:
+    INTERACTIVE_HANDLER_AVAILABLE = False
+    execute_command_interactive = None
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +56,34 @@ def execute_command_live(
     show_command: bool = True,
     timeout: int = 300,
     capture_output: bool = True,
+    api_key: Optional[str] = None,
+    user_context: str = "",
+    command_history: Optional[List[Dict[str, Any]]] = None,
+    use_interactive: bool = True,
 ) -> Tuple[int, str]:
     """
     Execute a terminal command with live output streaming
+    If use_interactive=True and command is interactive, uses pexpect for automatic prompt handling
     Returns: (exit_code, output)
     """
+    # Use interactive handler if available and command is interactive
+    if (
+        use_interactive
+        and INTERACTIVE_HANDLER_AVAILABLE
+        and execute_command_interactive
+        and is_interactive_command(command)
+        and api_key
+    ):
+        logger.info("Using interactive handler for command")
+        return execute_command_interactive(
+            command,
+            api_key,
+            user_context=user_context,
+            command_history=command_history,
+            timeout=timeout,
+            show_command=show_command,
+        )
+    
     if show_command:
         type_command(command)
 
@@ -713,6 +746,17 @@ def ask_ai_for_commands(
                 failed_context += f"  Reason: Tool '{tool}' not installed\n"
         failed_context += "\nUse alternative tools or built-in commands instead.\n"
 
+    # Extract SSH credentials from prompt if available
+    ssh_credentials = extract_ssh_credentials(prompt)
+    ssh_context = ""
+    if ssh_credentials:
+        ssh_context = f"\n\nSSH CREDENTIALS PROVIDED:\n"
+        ssh_context += f"User: {ssh_credentials.get('user')}\n"
+        ssh_context += f"Host: {ssh_credentials.get('host')}\n"
+        ssh_context += f"Password: {'*' * len(ssh_credentials.get('password', ''))}\n"
+        ssh_context += f"\nIMPORTANT: When using SSH commands, the system will automatically convert them to use 'sshpass' for non-interactive authentication.\n"
+        ssh_context += f"You can use: ssh {ssh_credentials.get('user')}@{ssh_credentials.get('host')} and it will be automatically converted.\n"
+
     system_prompt = f"""You are an autonomous terminal assistant that executes commands directly. You have full control of the terminal.
 
 System Information:
@@ -766,6 +810,10 @@ CRITICAL INSTRUCTIONS:
 21. **SUBDOMAINS/DOMAINS**: When you discover subdomains or domains (like dc.active.htb), the system will automatically add them to /etc/hosts
     - You don't need to manually add them - just use the domain names in your commands
     - The system tracks discovered domains and their IPs automatically
+22. **SSH AUTHENTICATION**: If SSH credentials are provided in the user's request, use regular SSH commands (e.g., ssh user@host)
+    - The system will automatically convert them to use 'sshpass' for non-interactive authentication
+    - You don't need to manually add sshpass - just use normal SSH commands
+{ssh_context}
 
 User's request: {prompt}
 
@@ -794,10 +842,14 @@ def execute_commands_sequence(
     commands: List[Dict[str, str]],
     api_key: str,
     command_history: Optional[List[Dict[str, Any]]] = None,
+    user_context: str = "",
 ) -> List[Dict[str, Any]]:
     """Execute a sequence of commands with live output and context awareness"""
     if command_history is None:
         command_history = []
+
+    # Extract SSH credentials from user context
+    ssh_credentials = extract_ssh_credentials(user_context) if user_context else None
 
     print(f"\n{Colors.BOLD}{Colors.BLUE}🤖 Terminal AI is executing commands...{Colors.RESET}\n")
 
@@ -852,6 +904,39 @@ def execute_commands_sequence(
             )
         else:
             # Regular command execution
+            # Handle SSH commands specially
+            is_ssh_command = re.search(r"^\s*ssh\s+", command, re.IGNORECASE)
+            
+            if is_ssh_command and ssh_credentials:
+                # Try to convert to sshpass
+                original_command = command
+                command = convert_ssh_to_sshpass(command, ssh_credentials)
+                
+                if command != original_command:
+                    logger.info(f"Converted SSH command: {original_command} -> {command}")
+                else:
+                    # sshpass not available, but credentials provided
+                    # Open in new terminal to avoid hanging
+                    print(
+                        f"{Colors.YELLOW}⚠️  sshpass not available. Opening SSH in new terminal to avoid password prompt hang...{Colors.RESET}\n"
+                    )
+                    type_command(original_command)
+                    terminal_id = open_new_terminal(original_command, split=False)
+                    command_history.append(
+                        {
+                            "command": original_command,
+                            "exit_code": 0,
+                            "output": "Opened in new controlled terminal (sshpass not available)",
+                            "type": "new_terminal",
+                            "terminal_id": terminal_id,
+                            "controlled": True,
+                        }
+                    )
+                    print(
+                        f"{Colors.GREEN}✓ Terminal ID: {terminal_id} (AI can control this terminal){Colors.RESET}\n"
+                    )
+                    continue  # Skip normal execution
+
             # Check if there are more commands after this one
             remaining_commands = [
                 c for c in commands[i:] if c.get("type") == "execute" and c.get("command")
@@ -908,7 +993,13 @@ def execute_commands_sequence(
                     print(f"{Colors.YELLOW}Attempting to execute anyway...{Colors.RESET}\n")
 
                 exit_code, output = execute_command_live(
-                    command, timeout=timeout, capture_output=True
+                    command,
+                    timeout=timeout,
+                    capture_output=True,
+                    api_key=api_key,
+                    user_context=user_context,
+                    command_history=command_history,
+                    use_interactive=True,
                 )
 
                 # Check for "command not found" errors
@@ -934,6 +1025,28 @@ def execute_commands_sequence(
                 print()  # Extra line for readability
             else:
                 # Normal command execution
+                # If SSH command without credentials, open in new terminal to avoid hanging
+                if is_ssh_command and not ssh_credentials and is_interactive_command(command):
+                    print(
+                        f"{Colors.YELLOW}⚠️  SSH command detected without credentials. Opening in new terminal to avoid password prompt hang...{Colors.RESET}\n"
+                    )
+                    type_command(command)
+                    terminal_id = open_new_terminal(command, split=False)
+                    command_history.append(
+                        {
+                            "command": command,
+                            "exit_code": 0,
+                            "output": "Opened in new controlled terminal (SSH without credentials)",
+                            "type": "new_terminal",
+                            "terminal_id": terminal_id,
+                            "controlled": True,
+                        }
+                    )
+                    print(
+                        f"{Colors.GREEN}✓ Terminal ID: {terminal_id} (AI can control this terminal){Colors.RESET}\n"
+                    )
+                    continue  # Skip normal execution
+                
                 # Check if this command should go to an existing controlled terminal
                 existing_terminal_id = find_controlled_terminal_for_command(
                     command, command_history
@@ -1005,7 +1118,13 @@ def execute_commands_sequence(
                     print(f"{Colors.YELLOW}Attempting to execute anyway...{Colors.RESET}\n")
 
                 exit_code, output = execute_command_live(
-                    command, timeout=timeout, capture_output=True
+                    command,
+                    timeout=timeout,
+                    capture_output=True,
+                    api_key=api_key,
+                    user_context=user_context,
+                    command_history=command_history,
+                    use_interactive=True,
                 )
 
                 # Extract subdomains/domains and add to /etc/hosts

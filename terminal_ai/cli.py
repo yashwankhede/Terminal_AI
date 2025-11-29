@@ -38,6 +38,8 @@ from terminal_ai.utils import (
     suggest_alternative,
     extract_subdomains_and_ips,
     add_to_hosts_file,
+    extract_ssh_credentials,
+    convert_ssh_to_sshpass,
 )
 
 logger = logging.getLogger(__name__)
@@ -132,7 +134,14 @@ def interactive_mode(api_key: str):
 
             if user_input.startswith("execute "):
                 cmd = user_input[8:].strip()
-                exit_code, output = execute_command_live(cmd, capture_output=True)
+                exit_code, output = execute_command_live(
+                    cmd,
+                    capture_output=True,
+                    api_key=api_key,
+                    user_context=user_input,
+                    command_history=command_history,
+                    use_interactive=True,
+                )
 
                 # Extract subdomains/domains and add to /etc/hosts
                 subdomains = extract_subdomains_and_ips(output)
@@ -173,7 +182,8 @@ def interactive_mode(api_key: str):
 
             if commands:
                 # Execute commands using the core execution function
-                command_history = execute_commands_sequence(commands, api_key, command_history)
+                # Pass user_input as context for SSH credential extraction
+                command_history = execute_commands_sequence(commands, api_key, command_history, user_context=user_input)
 
                 # After executing all commands, intelligently suggest next steps
                 print(
@@ -191,8 +201,9 @@ def interactive_mode(api_key: str):
                     )
 
                     # Execute suggested commands
+                    # Pass user_input as context for SSH credential extraction
                     command_history = execute_commands_sequence(
-                        next_commands, api_key, command_history
+                        next_commands, api_key, command_history, user_context=user_input
                     )
 
                     # Ask for next steps again
@@ -299,7 +310,7 @@ Examples:
     commands = extract_commands_from_response(response)
 
     if commands:
-        execute_commands_sequence(commands, api_key, command_history)
+        execute_commands_sequence(commands, api_key, command_history, user_context=args.prompt)
     else:
         # If no commands extracted, show the response
         print(response)

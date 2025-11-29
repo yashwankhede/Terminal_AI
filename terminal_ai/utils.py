@@ -102,6 +102,14 @@ def is_interactive_command(command: str) -> bool:
             logger.debug(f"Detected interactive command: {command}")
             return True
 
+    # SSH is interactive if it doesn't use sshpass, -i (key), or -o options
+    if re.search(r"^\s*ssh\s+", command_lower):
+        # Check if already using sshpass or has key file
+        if "sshpass" in command_lower or "-i" in command_lower or "-o" in command_lower:
+            return False
+        # SSH without credentials/key is interactive
+        return True
+
     # Conditionally interactive programs
     conditionally_interactive = [
         r"^\s*mysql\s*$",  # mysql without -e or script
@@ -139,8 +147,106 @@ def suggest_non_interactive_alternative(command: str) -> str:
         return "Use: python -c 'code' or python script.py"
     elif "bash" in command_lower or "sh" in command_lower:
         return "Use: bash -c 'command' or bash script.sh"
+    elif re.search(r"^\s*ssh\s+", command_lower):
+        return "Use: sshpass -p 'password' ssh user@host or ssh -i keyfile user@host"
 
     return "This is an interactive program. Consider using non-interactive flags or opening in a new terminal."
+
+
+def extract_ssh_credentials(context: str) -> Optional[Dict[str, str]]:
+    """
+    Extract SSH credentials from context/prompt
+    Looks for patterns like:
+    - ssh user@host:password
+    - ssh user@host password
+    - user@host / password
+    - user@host password
+    Returns: {'user': '...', 'host': '...', 'password': '...'} or None
+    """
+    # Pattern 1: ssh user@host:password (password can contain ! but stops at . or end)
+    pattern1 = r"ssh\s+([^\s@]+)@([^\s:]+):([^\s.]+?)(?:\s|\.|$)"
+    match = re.search(pattern1, context, re.IGNORECASE)
+    if match:
+        password = match.group(3).rstrip(".")
+        return {"user": match.group(1), "host": match.group(2), "password": password}
+
+    # Pattern 2: ssh user@host password (separate, password can contain ! but stops at . or end)
+    pattern2 = r"ssh\s+([^\s@]+)@([^\s]+)\s+([^\s.]+?)(?:\s|\.|$)"
+    match = re.search(pattern2, context, re.IGNORECASE)
+    if match:
+        password = match.group(3).rstrip(".")
+        return {"user": match.group(1), "host": match.group(2), "password": password}
+
+    # Pattern 3: user@host / password or user@host password (without ssh prefix)
+    pattern3 = r"([^\s@]+)@([^\s/]+)\s*[/:]\s*([^\s.]+?)(?:\s|\.|$)"
+    match = re.search(pattern3, context, re.IGNORECASE)
+    if match:
+        password = match.group(3).rstrip(".")
+        return {"user": match.group(1), "host": match.group(2), "password": password}
+
+    # Pattern 4: user@host password (space separated, no / or :)
+    pattern4 = r"([^\s@]+)@([^\s]+)\s+([^\s.]+?)(?:\s|\.|$)"
+    match = re.search(pattern4, context, re.IGNORECASE)
+    if match and "ssh" in context.lower():
+        password = match.group(3).rstrip(".")
+        return {"user": match.group(1), "host": match.group(2), "password": password}
+
+    return None
+
+
+def convert_ssh_to_sshpass(command: str, credentials: Optional[Dict[str, str]] = None) -> str:
+    """
+    Convert SSH command to use sshpass if credentials are available
+    Returns: Modified command with sshpass, or original if no credentials
+    """
+    if not re.search(r"^\s*ssh\s+", command, re.IGNORECASE):
+        return command
+
+    # If already using sshpass, return as-is
+    if "sshpass" in command.lower():
+        return command
+
+    # If using -i (key file), return as-is
+    if "-i" in command:
+        return command
+
+    if not credentials:
+        return command
+
+    user = credentials.get("user")
+    host = credentials.get("host")
+    password = credentials.get("password")
+
+    if not all([user, host, password]):
+        return command
+
+    # Check if sshpass is available
+    try:
+        subprocess.run(
+            ["which", "sshpass"], capture_output=True, check=True, timeout=2
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        logger.warning("sshpass not found. Install with: brew install hudochenkov/sshpass/sshpass (macOS) or apt-get install sshpass (Linux)")
+        return command
+
+    # Extract the SSH command parts
+    # Match: ssh [options] [user@]host [command]
+    ssh_match = re.match(r"^\s*ssh\s+(.*)", command, re.IGNORECASE)
+    if not ssh_match:
+        return command
+
+    ssh_args = ssh_match.group(1).strip()
+
+    # Check if user@host is already in the command
+    if f"{user}@{host}" in ssh_args:
+        # Replace with sshpass version
+        new_command = f'sshpass -p "{password}" ssh {ssh_args}'
+    else:
+        # Add user@host if not present
+        new_command = f'sshpass -p "{password}" ssh {ssh_args} {user}@{host}'
+
+    logger.info(f"Converted SSH command to use sshpass: {new_command}")
+    return new_command
 
 
 def is_dangerous_command(command: str) -> bool:
