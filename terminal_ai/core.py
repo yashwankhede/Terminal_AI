@@ -1400,19 +1400,25 @@ def execute_commands_sequence(
                             # Wait a bit for command to execute, then read output with timeout
                             time.sleep(2)  # Give command time to start
                             
-                            # Try to read output with timeout
-                            max_wait_time = 30  # Maximum 30 seconds to wait for output
-                            wait_interval = 2   # Check every 2 seconds
+                            # Try to read output with timeout (shorter timeout to prevent hanging)
+                            max_wait_time = 10  # Maximum 10 seconds to wait for output
+                            wait_interval = 1   # Check every 1 second
                             output = ""
                             waited = 0
                             
                             while waited < max_wait_time:
                                 output = read_terminal_output(existing_terminal_id)
                                 
-                                # Check if we got meaningful output (more than just timestamps/logs)
-                                if output and len(output.strip()) > 50:
+                                # Check if we got meaningful output (not just logs)
+                                if output and len(output.strip()) > 20:
+                                    output_lower = output.lower()
                                     # Check if output contains actual command results
-                                    if any(indicator in output.lower() for indicator in ["executing:", "command completed", "exit code", "\n", " "]):
+                                    if any(indicator in output_lower for indicator in [
+                                        "executing:", "command completed", "exit code", 
+                                        "spawning ssh", "connected successfully",
+                                        "\n", "error", "failed", "password"
+                                    ]):
+                                        # Got some output, break
                                         break
                                 
                                 # Check terminal status file for errors
@@ -1423,27 +1429,23 @@ def execute_commands_sequence(
                                         status = status_file.read_text().strip()
                                         if "error" in status.lower() or "failed" in status.lower():
                                             logger.warning(f"Terminal {existing_terminal_id} has errors")
-                                            output = f"Error in terminal: {status}"
+                                            output = f"[Terminal error: {status}]"
                                             break
                                 
                                 time.sleep(wait_interval)
                                 waited += wait_interval
-                                print(f"{Colors.YELLOW}⏳ Waiting for output from terminal... ({waited}s/{max_wait_time}s){Colors.RESET}")
+                                if waited % 3 == 0:  # Show progress every 3 seconds
+                                    print(f"{Colors.YELLOW}⏳ Waiting for terminal output... ({waited}s/{max_wait_time}s){Colors.RESET}")
                             
-                            # If we still don't have output, check for errors or timeout
-                            if not output or len(output.strip()) < 50:
-                                # Check if terminal is still active
-                                terminal_status = get_terminal_status(existing_terminal_id)
-                                if terminal_status == "error" or terminal_status == "not_found":
-                                    logger.warning(f"Terminal {existing_terminal_id} not responding, executing locally instead")
-                                    # Remove from controlled and execute locally
-                                    if existing_terminal_id in controlled_terminals:
-                                        del controlled_terminals[existing_terminal_id]
-                                    # Fall through to normal execution
-                                    existing_terminal_id = None
-                                else:
-                                    # Terminal seems active but no output - might be waiting
-                                    output = f"[Command sent to terminal but no output received after {waited}s. Terminal may be waiting for input or command is still running.]"
+                            # If we still don't have meaningful output, assume terminal is stuck
+                            if not output or len(output.strip()) < 20:
+                                logger.warning(f"Terminal {existing_terminal_id} not responding after {waited}s")
+                                print(f"{Colors.YELLOW}⚠️  Terminal not responding, executing command locally instead...{Colors.RESET}\n")
+                                # Remove from controlled and execute locally
+                                if existing_terminal_id in controlled_terminals:
+                                    del controlled_terminals[existing_terminal_id]
+                                # Fall through to normal execution
+                                existing_terminal_id = None
                             
                             if existing_terminal_id:  # Still valid
                                 command_history.append(
