@@ -314,6 +314,10 @@ if {{[catch {{spawn -noecho bash -c "{escaped_ssh_cmd}"}} error]}} {{
     handle_error "Failed to spawn SSH: $error"
 }}
 
+# Enable logging of all expect interactions
+log_user 0
+exp_internal 0
+
 # Handle password prompt if needed
 if {{$password != ""}} {{
     expect {{
@@ -375,15 +379,45 @@ while {{1}} {{
                 if {{$line != ""}} {{
                     log_output "Sending command: $line"
                     send "$line{return_char}"
+                    
+                    # Capture all output until we get the prompt back
+                    set cmd_timeout 30
                     expect {{
-                        -re {{.*@.*[:\$] }} {{
+                        -re {{(.*)\r\n.*@.*[:\$] }} {{
                             # Command completed, got prompt back
+                            # Capture everything before the prompt (group 1)
+                            set cmd_output $expect_out(1,string)
+                            # Write the actual command output
+                            if {{$cmd_output != ""}} {{
+                                puts $out_fd "$cmd_output"
+                                flush $out_fd
+                            }}
                             log_output "Command completed"
+                        }}
+                        -re {{.*@.*[:\$] }} {{
+                            # Got prompt - capture everything in buffer before prompt
+                            set full_buffer $expect_out(buffer)
+                            # Extract everything before the prompt line
+                            if {{[regexp {{(.*)\r\n.*@.*[:\$] }} $full_buffer match output_part]}} {{
+                                if {{$output_part != ""}} {{
+                                    puts $out_fd "$output_part"
+                                    flush $out_fd
+                                }}
+                            }} else {{
+                                # No output before prompt, just log
+                                log_output "Command completed (no output)"
+                            }}
                         }}
                         timeout {{
                             log_output "Timeout waiting for command completion"
+                            # Try to capture what we have so far
+                            set cmd_output $expect_out(buffer)
+                            if {{$cmd_output != ""}} {{
+                                puts $out_fd "$cmd_output"
+                                flush $out_fd
+                            }}
                         }}
-                    }}
+                    }} timeout $cmd_timeout
                 }}
             }}
             set LAST_LINE_COUNT $CURRENT_LINE_COUNT
