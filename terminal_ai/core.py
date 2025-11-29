@@ -1396,11 +1396,25 @@ def execute_commands_sequence(
                         type_command(command)
                         if send_command_to_terminal(existing_terminal_id, command):
                             print(f"{Colors.GREEN}✓ Command sent to terminal{Colors.RESET}")
-                            time.sleep(1)
-                            output = read_terminal_output(existing_terminal_id)
                             
-                            # Check if we got output or if terminal might have errors
-                            if not output or "error" in output.lower() or "failed" in output.lower():
+                            # Wait a bit for command to execute, then read output with timeout
+                            time.sleep(2)  # Give command time to start
+                            
+                            # Try to read output with timeout
+                            max_wait_time = 30  # Maximum 30 seconds to wait for output
+                            wait_interval = 2   # Check every 2 seconds
+                            output = ""
+                            waited = 0
+                            
+                            while waited < max_wait_time:
+                                output = read_terminal_output(existing_terminal_id)
+                                
+                                # Check if we got meaningful output (more than just timestamps/logs)
+                                if output and len(output.strip()) > 50:
+                                    # Check if output contains actual command results
+                                    if any(indicator in output.lower() for indicator in ["executing:", "command completed", "exit code", "\n", " "]):
+                                        break
+                                
                                 # Check terminal status file for errors
                                 if existing_terminal_id in controlled_terminals:
                                     control_files = controlled_terminals[existing_terminal_id]["control_files"]
@@ -1408,11 +1422,28 @@ def execute_commands_sequence(
                                     if status_file.exists():
                                         status = status_file.read_text().strip()
                                         if "error" in status.lower() or "failed" in status.lower():
-                                            logger.warning(f"Terminal {existing_terminal_id} has errors, executing locally instead")
-                                            # Remove from controlled and execute locally
-                                            del controlled_terminals[existing_terminal_id]
-                                            # Fall through to normal execution
-                                            existing_terminal_id = None
+                                            logger.warning(f"Terminal {existing_terminal_id} has errors")
+                                            output = f"Error in terminal: {status}"
+                                            break
+                                
+                                time.sleep(wait_interval)
+                                waited += wait_interval
+                                print(f"{Colors.YELLOW}⏳ Waiting for output from terminal... ({waited}s/{max_wait_time}s){Colors.RESET}")
+                            
+                            # If we still don't have output, check for errors or timeout
+                            if not output or len(output.strip()) < 50:
+                                # Check if terminal is still active
+                                terminal_status = get_terminal_status(existing_terminal_id)
+                                if terminal_status == "error" or terminal_status == "not_found":
+                                    logger.warning(f"Terminal {existing_terminal_id} not responding, executing locally instead")
+                                    # Remove from controlled and execute locally
+                                    if existing_terminal_id in controlled_terminals:
+                                        del controlled_terminals[existing_terminal_id]
+                                    # Fall through to normal execution
+                                    existing_terminal_id = None
+                                else:
+                                    # Terminal seems active but no output - might be waiting
+                                    output = f"[Command sent to terminal but no output received after {waited}s. Terminal may be waiting for input or command is still running.]"
                             
                             if existing_terminal_id:  # Still valid
                                 command_history.append(
@@ -1426,7 +1457,7 @@ def execute_commands_sequence(
                                 )
                                 if output:
                                     print(f"{Colors.CYAN}Output from terminal:{Colors.RESET}")
-                                    print(output[-500:] if len(output) > 500 else output)
+                                    print(output[-1000:] if len(output) > 1000 else output)
                                 print()
                                 continue
                         else:
