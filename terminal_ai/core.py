@@ -1345,7 +1345,6 @@ def execute_commands_sequence(
                     )
                     type_command(command)
                     # Try to extract password from user context
-                    from terminal_ai.utils import extract_ssh_credentials
                     ssh_creds = extract_ssh_credentials(user_context) if user_context else None
                     ssh_pass = ssh_creds.get("password") if ssh_creds else None
                     terminal_id = open_new_terminal(command, split=False, ssh_password=ssh_pass)
