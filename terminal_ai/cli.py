@@ -7,6 +7,9 @@ import sys
 import argparse
 import time
 import logging
+import subprocess
+import os
+from pathlib import Path
 
 # Try to import readline for command history
 try:
@@ -54,6 +57,154 @@ def show_star_prompt():
             f"{Colors.BOLD}{Colors.YELLOW}https://github.com/yashwankhede/Terminal_AI{Colors.RESET}"
         )
         print(f"{Colors.CYAN}{'='*60}{Colors.RESET}\n")
+
+
+def update_terminal_ai():
+    """Update Terminal AI to the latest version from GitHub"""
+    print(f"\n{Colors.BOLD}{Colors.CYAN}🔄 Updating Terminal AI...{Colors.RESET}\n")
+    
+    # Get the project root directory
+    project_root = Path(__file__).parent.parent.absolute()
+    
+    # Check if we're in a git repository
+    if not (project_root / ".git").exists():
+        print(f"{Colors.RED}❌ Error: Not a git repository.{Colors.RESET}")
+        print(f"{Colors.YELLOW}   This command only works when Terminal AI is installed from GitHub.{Colors.RESET}")
+        print(f"{Colors.CYAN}   To update, run: git pull origin main{Colors.RESET}")
+        return
+    
+    try:
+        # Check if git is available
+        subprocess.run(["git", "--version"], capture_output=True, check=True, timeout=5)
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        print(f"{Colors.RED}❌ Error: git is not available.{Colors.RESET}")
+        print(f"{Colors.YELLOW}   Please install git to use the --update flag.{Colors.RESET}")
+        return
+    
+    # Get current branch and commit
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5
+        )
+        current_branch = result.stdout.strip()
+        
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5
+        )
+        current_commit = result.stdout.strip()[:8]
+        
+        print(f"{Colors.CYAN}Current branch: {current_branch}{Colors.RESET}")
+        print(f"{Colors.CYAN}Current commit: {current_commit}{Colors.RESET}\n")
+    except subprocess.CalledProcessError:
+        print(f"{Colors.YELLOW}⚠️  Could not determine current version{Colors.RESET}\n")
+    
+    # Fetch latest changes
+    print(f"{Colors.BLUE}📥 Fetching latest changes from GitHub...{Colors.RESET}")
+    try:
+        result = subprocess.run(
+            ["git", "fetch", "origin"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30
+        )
+        print(f"{Colors.GREEN}✓ Fetched latest changes{Colors.RESET}\n")
+    except subprocess.CalledProcessError as e:
+        print(f"{Colors.RED}❌ Error fetching changes: {e.stderr}{Colors.RESET}")
+        return
+    except subprocess.TimeoutExpired:
+        print(f"{Colors.RED}❌ Error: Fetch operation timed out{Colors.RESET}")
+        return
+    
+    # Check if there are updates
+    try:
+        result = subprocess.run(
+            ["git", "rev-list", "--count", "HEAD..origin/main"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5
+        )
+        commits_behind = int(result.stdout.strip())
+        
+        if commits_behind == 0:
+            print(f"{Colors.GREEN}✓ Terminal AI is already up to date!{Colors.RESET}\n")
+            return
+        
+        print(f"{Colors.CYAN}📦 Found {commits_behind} new commit(s){Colors.RESET}\n")
+    except (subprocess.CalledProcessError, ValueError):
+        # If we can't determine, proceed anyway
+        print(f"{Colors.CYAN}📦 Checking for updates...{Colors.RESET}\n")
+    
+    # Pull the latest changes
+    print(f"{Colors.BLUE}⬇️  Pulling latest changes...{Colors.RESET}")
+    try:
+        result = subprocess.run(
+            ["git", "pull", "origin", "main"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30
+        )
+        print(f"{Colors.GREEN}✓ Pulled latest changes{Colors.RESET}\n")
+        print(f"{Colors.CYAN}Output:{Colors.RESET}")
+        print(result.stdout)
+    except subprocess.CalledProcessError as e:
+        print(f"{Colors.RED}❌ Error pulling changes: {e.stderr}{Colors.RESET}")
+        if "conflict" in e.stderr.lower() or "merge" in e.stderr.lower():
+            print(f"{Colors.YELLOW}⚠️  Merge conflicts detected. Please resolve manually.{Colors.RESET}")
+        return
+    except subprocess.TimeoutExpired:
+        print(f"{Colors.RED}❌ Error: Pull operation timed out{Colors.RESET}")
+        return
+    
+    # Check if requirements.txt changed and suggest reinstall
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD@{1}", "HEAD"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5
+        )
+        changed_files = result.stdout.strip().split('\n')
+        
+        if "requirements.txt" in changed_files or "setup.py" in changed_files or "pyproject.toml" in changed_files:
+            print(f"\n{Colors.YELLOW}⚠️  Dependencies may have changed{Colors.RESET}")
+            print(f"{Colors.CYAN}   Consider reinstalling dependencies:{Colors.RESET}")
+            print(f"{Colors.CYAN}   pip install -r requirements.txt{Colors.RESET}\n")
+    except subprocess.CalledProcessError:
+        pass
+    
+    # Get new commit hash
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5
+        )
+        new_commit = result.stdout.strip()[:8]
+        print(f"{Colors.GREEN}✓ Terminal AI updated successfully!{Colors.RESET}")
+        print(f"{Colors.CYAN}New commit: {new_commit}{Colors.RESET}\n")
+    except subprocess.CalledProcessError:
+        print(f"{Colors.GREEN}✓ Terminal AI updated successfully!{Colors.RESET}\n")
 
 
 def interactive_mode(api_key: str):
@@ -267,6 +418,12 @@ Examples:
 
     parser.add_argument("--set-api-key", help="Set OpenAI API key")
 
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Update Terminal AI to the latest version from GitHub",
+    )
+
     # Check for common typos before parsing
     for arg in sys.argv:
         if arg in ["--interactivel", "--interactiv", "--interactve", "--interactie"]:
@@ -276,6 +433,11 @@ Examples:
             sys.exit(1)
 
     args = parser.parse_args()
+
+    # Handle update
+    if args.update:
+        update_terminal_ai()
+        return
 
     # Handle API key setting
     if args.set_api_key:
